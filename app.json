@@ -35,10 +35,16 @@
           "de": "Modus auf [[mode]] setzen"
         },
         "args": [
-          { "name": "device", "type": "device", "filter": "driver_id=zone" },
+          {
+            "name": "device",
+            "type": "device",
+            "filter": "driver_id=zone",
+            "title": { "en": "Zone", "de": "Zone" }
+          },
           {
             "name": "mode",
             "type": "dropdown",
+            "title": { "en": "Mode", "de": "Modus" },
             "values": [
               { "id": "off",   "label": { "en": "Off",      "de": "Aus" } },
               { "id": "day",   "label": { "en": "Adaptive", "de": "Adaptiv" } },
@@ -62,6 +68,7 @@
           {
             "name": "target",
             "type": "autocomplete",
+            "title": { "en": "Light", "de": "Lampe" },
             "placeholder": { "en": "Pick a light…", "de": "Lampe wählen…" }
           }
         ]
@@ -76,10 +83,16 @@
           "de": "Modus !{{ist|ist nicht}} [[mode]]"
         },
         "args": [
-          { "name": "device", "type": "device", "filter": "driver_id=zone" },
+          {
+            "name": "device",
+            "type": "device",
+            "filter": "driver_id=zone",
+            "title": { "en": "Zone", "de": "Zone" }
+          },
           {
             "name": "mode",
             "type": "dropdown",
+            "title": { "en": "Mode", "de": "Modus" },
             "values": [
               { "id": "off",   "label": { "en": "Off",      "de": "Aus" } },
               { "id": "day",   "label": { "en": "Adaptive", "de": "Adaptiv" } },
@@ -98,6 +111,11 @@
     "name": "3cheesehigh",
     "email": "hello@3cheesehigh.com"
   },
+  "source": "https://github.com/3cheesehigh/homey-lumina",
+  "bugs": {
+    "url": "https://github.com/3cheesehigh/homey-lumina/issues"
+  },
+  "support": "mailto:hello@3cheesehigh.com",
   "brandColor": "#f59e0b",
   "capabilities": {
     "adaptive_kelvin": {

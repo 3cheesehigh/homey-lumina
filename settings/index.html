@@ -52,62 +52,173 @@
 </head>
 <body>
 
-<h2>Lumina</h2>
+<h2 data-i18n="title">Lumina</h2>
 
-<h3>Globaler Tick</h3>
+<h3 data-i18n="globalTick">Global tick</h3>
 <div class="row">
   <label>
-    Update-Intervall (Sekunden)
-    <div style="font-size:.85em; color:#999;">Wie oft die App den Sonnenstand neu berechnet. Lampen blenden zwischen Updates smooth, 300 s reichen.</div>
+    <span data-i18n="intervalLabel">Update interval (seconds)</span>
+    <div style="font-size:.85em; color:#999;" data-i18n="intervalHint">How often the app recomputes solar position. Lamps fade smoothly between updates; 300 s is plenty.</div>
   </label>
   <input type="number" id="tickSeconds" min="30" max="1800" step="30" value="300">
 </div>
 <div class="row">
   <label>
-    Manuelle Änderungen respektieren
-    <div style="font-size:.85em; color:#999;">Verändert ein Nutzer eine Lampe manuell, pausiert die App diese eine Lampe bis sie aus- und wieder eingeschaltet wird.</div>
+    <span data-i18n="respectManualLabel">Respect manual changes</span>
+    <div style="font-size:.85em; color:#999;" data-i18n="respectManualHint">If a user changes a lamp manually, the app pauses that lamp until it is switched off and back on.</div>
   </label>
   <input type="checkbox" id="respectManualChanges" checked>
 </div>
 <div style="margin-top:.8em;">
-  <button id="saveGlobal">Speichern</button>
+  <button id="saveGlobal" data-i18n="save">Save</button>
 </div>
 
-<h3>Gruppen</h3>
-<p class="hint">
-  Gruppen bündeln Default-Werte und enthalten die zugewiesenen Zonen. Eine Zone in eine andere
-  Gruppe verschieben übernimmt deren Werte als neue Defaults für die Zone (eigene Anpassungen in den
-  Zone-Einstellungen gehen dabei verloren).
+<h3 data-i18n="groupsHeading">Groups</h3>
+<p class="hint" data-i18n="groupsIntro">
+  Groups bundle default values and contain the zones assigned to them. Moving a zone into another
+  group adopts that group's values as the new defaults for the zone (per-key overrides on the zone
+  are preserved).
 </p>
 
 <div id="groups"></div>
 
-<button id="addGroup" class="tertiary">+ Neue Gruppe</button>
+<button id="addGroup" class="tertiary" data-i18n="addGroup">+ New group</button>
 
 <div id="status"></div>
 
 <script>
+// Client-side i18n. Two language packs, picked via navigator.language at boot.
+// Strings use {placeholder} for substitution. Field labels come pre-localised
+// from lib/fields.js (which carries label.en + label.de) and are looked up via
+// f.label[LANG] at render time.
+const I18N = {
+  en: {
+    title: 'Lumina',
+    globalTick: 'Global tick',
+    intervalLabel: 'Update interval (seconds)',
+    intervalHint: 'How often the app recomputes solar position. Lamps fade smoothly between updates; 300 s is plenty.',
+    respectManualLabel: 'Respect manual changes',
+    respectManualHint: 'If a user changes a lamp manually, the app pauses that lamp until it is switched off and back on.',
+    save: 'Save',
+    rangeError: 'Interval must be between 30 and 1800 seconds.',
+    globalSaved: 'Global settings saved.',
+    saveFailed: 'Save failed: ',
+    groupsHeading: 'Groups',
+    groupsIntro: 'Groups bundle default values and contain the zones assigned to them. Moving a zone into another group adopts that group’s values as the new defaults for the zone (per-key overrides on the zone are preserved).',
+    addGroup: '+ New group',
+    newGroupName: 'New group',
+    defaultGroupName: 'Group',
+    defaultZoneName: 'Lumina Zone',
+    emptyGroups: 'No groups yet — create one.',
+    sectionDay: 'Day',
+    sectionNight: 'Night',
+    nightColorLabel: 'Coloured night light instead of Kelvin',
+    zoneNightColorLabel: 'Custom night colour (overrides group)',
+    inheritedSwatchLabel: '→ inherits:',
+    inheritedPrefix: 'inherits: ',
+    inheritsArrow: '→ ',
+    zonesHeading: 'Assigned zones',
+    noZones: 'No zones assigned.',
+    moveZonePrompt: '— move a zone from another group here —',
+    moveZoneCurrent: 'currently: ',
+    remove: 'Remove',
+    deleteBtn: 'Delete',
+    zoneSaveBtn: 'Save zone',
+    namePlaceholder: 'Name',
+    nowLabel: 'now',
+    deleteConfirm: 'Really delete group "{name}"?',
+    groupSaved: 'Group "{name}" saved.',
+    groupCreated: 'New group created.',
+    createFailed: 'Create failed: ',
+    deleted: 'Group deleted.',
+    deleteFailed: 'Delete failed: ',
+    zoneSaved: 'Zone "{name}" saved.',
+    zoneSaveFailed: 'Save zone failed: ',
+    zoneMoving: 'Moving zone into group "{name}"…',
+    zoneMoved: 'Zone moved.',
+    zoneMoveFailed: 'Move failed: ',
+    fieldsLoadFailed: 'Failed to load fields: '
+  },
+  de: {
+    title: 'Lumina',
+    globalTick: 'Globaler Tick',
+    intervalLabel: 'Update-Intervall (Sekunden)',
+    intervalHint: 'Wie oft die App den Sonnenstand neu berechnet. Lampen blenden zwischen Updates smooth, 300 s reichen.',
+    respectManualLabel: 'Manuelle Änderungen respektieren',
+    respectManualHint: 'Verändert ein Nutzer eine Lampe manuell, pausiert die App diese eine Lampe bis sie aus- und wieder eingeschaltet wird.',
+    save: 'Speichern',
+    rangeError: 'Intervall muss zwischen 30 und 1800 Sekunden liegen.',
+    globalSaved: 'Globale Einstellungen gespeichert.',
+    saveFailed: 'Speichern fehlgeschlagen: ',
+    groupsHeading: 'Gruppen',
+    groupsIntro: 'Gruppen bündeln Default-Werte und enthalten die zugewiesenen Zonen. Eine Zone in eine andere Gruppe verschieben übernimmt deren Werte als neue Defaults für die Zone (eigene Anpassungen in den Zone-Einstellungen bleiben erhalten).',
+    addGroup: '+ Neue Gruppe',
+    newGroupName: 'Neue Gruppe',
+    defaultGroupName: 'Gruppe',
+    defaultZoneName: 'Lumina-Zone',
+    emptyGroups: 'Noch keine Gruppen — leg eine an.',
+    sectionDay: 'Tag',
+    sectionNight: 'Nacht',
+    nightColorLabel: 'Farbiges Nachtlicht statt Kelvin',
+    zoneNightColorLabel: 'Eigene Nachtfarbe (überschreibt Gruppe)',
+    inheritedSwatchLabel: '→ erbt:',
+    inheritedPrefix: 'erbt: ',
+    inheritsArrow: '→ ',
+    zonesHeading: 'Zugewiesene Zonen',
+    noZones: 'Keine Zonen zugewiesen.',
+    moveZonePrompt: '— Zone aus anderer Gruppe hierher verschieben —',
+    moveZoneCurrent: 'aktuell: ',
+    remove: 'Entfernen',
+    deleteBtn: 'Löschen',
+    zoneSaveBtn: 'Zone speichern',
+    namePlaceholder: 'Name',
+    nowLabel: 'jetzt',
+    deleteConfirm: 'Gruppe "{name}" wirklich löschen?',
+    groupSaved: 'Gruppe "{name}" gespeichert.',
+    groupCreated: 'Neue Gruppe angelegt.',
+    createFailed: 'Anlegen fehlgeschlagen: ',
+    deleted: 'Gruppe gelöscht.',
+    deleteFailed: 'Löschen fehlgeschlagen: ',
+    zoneSaved: 'Zone "{name}" gespeichert.',
+    zoneSaveFailed: 'Zone speichern fehlgeschlagen: ',
+    zoneMoving: 'Verschiebe Zone in Gruppe "{name}"…',
+    zoneMoved: 'Zone verschoben.',
+    zoneMoveFailed: 'Zuweisung fehlgeschlagen: ',
+    fieldsLoadFailed: 'Felder laden fehlgeschlagen: '
+  }
+};
+const LANG = (navigator.language || 'en').toLowerCase().startsWith('de') ? 'de' : 'en';
+function t(key, params) {
+  const tpl = (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
+  if (!params) return tpl;
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => (params[k] != null ? params[k] : '{' + k + '}'));
+}
+// Pick the right field label for the current language; fall back to en if a
+// translation is missing for the active locale.
+function fieldLabel(f) {
+  return (f.label && (f.label[LANG] || f.label.en)) || f.key;
+}
+
 const status = document.getElementById('status');
 const setStatus = (msg, kind='ok') => { status.textContent = msg; status.className = kind; };
 
 let groups = {};
 let FIELDS = []; // fetched from app via /fields
-let zones = []; // [{id, name, groupId}] from /zones
+let zones = []; // [{id, name, groupId, overrides}] from /zones
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
-// Renders the "Farbiges Nachtlicht"-Row used in both group and zone editors.
-// scope is 'g' (group) or 'z' (zone) and is used to namespace the classes so
-// the row-level query selectors don't accidentally pick up the wrong inputs.
+// Renders the "coloured night light" row used in both group and zone editors.
+// scope is 'g' (group) or 'z' (zone) and namespaces the input classes.
 // `hex` is the currently stored value (or '' for "off"); `inheritedHex` is the
-// fallback shown as a small swatch when this row is in the zone editor and
-// the group already has a color configured.
+// fallback swatch shown when this row is in the zone editor and the group
+// already has a colour configured.
 function renderNightColorRow({ scope, hex, labelOn, inheritedHex }) {
   const on = !!hex;
   const value = hex || inheritedHex || '#ff5500';
   const inheritHtml = inheritedHex
     ? `<span class="group-val" style="display:flex;align-items:center;gap:.3em;">
-         → erbt:
+         ${escapeHtml(t('inheritedSwatchLabel'))}
          <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${escapeHtml(inheritedHex)};border:1px solid #ccc;"></span>
        </span>`
     : '';
@@ -127,7 +238,7 @@ function renderGroups() {
   const box = document.getElementById('groups');
   const keys = Object.keys(groups);
   if (!keys.length) {
-    box.innerHTML = '<p class="hint" style="font-style:italic;">Noch keine Gruppen — leg eine an.</p>';
+    box.innerHTML = `<p class="hint" style="font-style:italic;">${escapeHtml(t('emptyGroups'))}</p>`;
     return;
   }
   box.innerHTML = keys.map(gid => {
@@ -137,27 +248,24 @@ function renderGroups() {
       sections[f.section] = sections[f.section] || [];
       sections[f.section].push(f);
     }
-    const sectionTitle = { day: 'Tag', night: 'Nacht' };
+    const sectionTitle = { day: t('sectionDay'), night: t('sectionNight') };
     const sectionsHtml = Object.entries(sections).map(([sec, fields]) => {
       const fieldsHtml = fields.map(f =>
         `<div class="field-row">
-           <label>${escapeHtml(f.label.de)}${f.unit ? ' ('+f.unit+')' : ''}</label>
+           <label>${escapeHtml(fieldLabel(f))}${f.unit ? ' ('+f.unit+')' : ''}</label>
            <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" value="${g[f.key] ?? f.defaultValue}">
          </div>`
       ).join('');
-      // The night section gets an optional color picker: when active it
-      // overrides Kelvin with a fixed RGB color (only applied on lamps that
-      // support light_hue + light_saturation; others fall back to Kelvin).
+      // Night section gets the optional colour picker (overrides Kelvin on
+      // lamps that support light_hue + light_saturation; others fall back).
       const extra = sec === 'night' ? renderNightColorRow({
         scope: 'g',
         hex: g.nightColor || '',
-        labelOn: 'Farbiges Nachtlicht statt Kelvin',
+        labelOn: t('nightColorLabel'),
       }) : '';
-      return `<div class="section-label">${sectionTitle[sec] || sec}</div>${fieldsHtml}${extra}`;
+      return `<div class="section-label">${escapeHtml(sectionTitle[sec] || sec)}</div>${fieldsHtml}${extra}`;
     }).join('');
 
-    // Zones currently in this group, and zones available to add (i.e. in
-    // other groups).
     // Each zone has exactly one groupId at any time. "inGroup" = zones whose
     // current groupId equals this card's gid. "elsewhere" = zones currently
     // in some other group; selecting one of them MOVES it here (the old group
@@ -169,9 +277,9 @@ function renderGroups() {
       const groupVal = g[f.key] ?? f.defaultValue;
       const unit = f.unit ? ` (${f.unit})` : '';
       return `<div class="field-row">
-        <label>${escapeHtml(f.label.de)}${unit}</label>
-        <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" placeholder="erbt: ${groupVal}">
-        <span class="group-val">→ ${groupVal}${f.unit || ''}</span>
+        <label>${escapeHtml(fieldLabel(f))}${unit}</label>
+        <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" placeholder="${escapeHtml(t('inheritedPrefix') + groupVal)}">
+        <span class="group-val">${escapeHtml(t('inheritsArrow'))}${groupVal}${f.unit || ''}</span>
       </div>`;
     }).join('');
     // Zone-level color override: if the group already has a night color the
@@ -180,7 +288,7 @@ function renderGroups() {
     const zoneColorRow = renderNightColorRow({
       scope: 'z',
       hex: '',
-      labelOn: 'Eigene Nachtfarbe (überschreibt Gruppe)',
+      labelOn: t('zoneNightColorLabel'),
       inheritedHex: g.nightColor || '',
     });
 
@@ -190,55 +298,55 @@ function renderGroups() {
              <div class="zone-head">
                <span class="chev">▶</span>
                <span class="zone-name">${escapeHtml(z.name)}</span>
-               <button class="tertiary z-remove" style="margin-left:auto;">Entfernen</button>
+               <button class="tertiary z-remove" style="margin-left:auto;">${escapeHtml(t('remove'))}</button>
              </div>
              <div class="zone-edit">
-               <input type="text" class="z-name" value="${escapeHtml(z.name)}" placeholder="Name">
+               <input type="text" class="z-name" value="${escapeHtml(z.name)}" placeholder="${escapeHtml(t('namePlaceholder'))}">
                ${zoneEditorFields}
                ${zoneColorRow}
                <div class="curve-card" data-zone-curve>
                  <div class="curve-meta">
-                   <span>jetzt: <strong class="curve-now">—</strong></span>
+                   <span>${escapeHtml(t('nowLabel'))}: <strong class="curve-now">—</strong></span>
                    <span>↑ <strong class="curve-sunrise">—</strong></span>
                    <span>↓ <strong class="curve-sunset">—</strong></span>
                  </div>
                  <div class="curve-svg"></div>
                </div>
                <div class="actions">
-                 <button class="z-save">Zone speichern</button>
+                 <button class="z-save">${escapeHtml(t('zoneSaveBtn'))}</button>
                </div>
              </div>
            </div>`
         ).join('')
-      : '<div style="color:#999; font-size:.9em; padding:.4em 0;">Keine Zonen zugewiesen.</div>';
+      : `<div style="color:#999; font-size:.9em; padding:.4em 0;">${escapeHtml(t('noZones'))}</div>`;
     const elsewhereOpts = elsewhere.map(z =>
-      `<option value="${escapeHtml(z.id)}">${escapeHtml(z.name)} (aktuell: ${escapeHtml(groups[z.groupId]?.name || z.groupId || '—')})</option>`
+      `<option value="${escapeHtml(z.id)}">${escapeHtml(z.name)} (${escapeHtml(t('moveZoneCurrent'))}${escapeHtml(groups[z.groupId]?.name || z.groupId || '—')})</option>`
     ).join('');
 
     return `
       <div class="group-card" data-id="${gid}">
-        <h4><input type="text" class="g-name" value="${escapeHtml(g.name || '')}" placeholder="Name"></h4>
+        <h4><input type="text" class="g-name" value="${escapeHtml(g.name || '')}" placeholder="${escapeHtml(t('namePlaceholder'))}"></h4>
         <div class="curve-card" data-curve-for="${gid}">
           <div class="curve-meta">
-            <span>jetzt: <strong class="curve-now">—</strong></span>
+            <span>${escapeHtml(t('nowLabel'))}: <strong class="curve-now">—</strong></span>
             <span>↑ <strong class="curve-sunrise">—</strong></span>
             <span>↓ <strong class="curve-sunset">—</strong></span>
           </div>
           <div class="curve-svg"></div>
         </div>
         ${sectionsHtml}
-        <div class="section-label">Zugewiesene Zonen</div>
+        <div class="section-label">${escapeHtml(t('zonesHeading'))}</div>
         ${zonesListHtml}
         ${elsewhere.length ? `
           <div class="field-row" style="margin-top:.4em;">
             <select class="z-add" style="flex:1; padding:.4em; border:1px solid #ddd; border-radius:4px;">
-              <option value="">— Zone aus anderer Gruppe hierher verschieben —</option>
+              <option value="">${escapeHtml(t('moveZonePrompt'))}</option>
               ${elsewhereOpts}
             </select>
           </div>` : ''}
         <div class="actions">
-          <button class="danger g-delete">Löschen</button>
-          <button class="g-save">Speichern</button>
+          <button class="danger g-delete">${escapeHtml(t('deleteBtn'))}</button>
+          <button class="g-save">${escapeHtml(t('save'))}</button>
         </div>
       </div>`;
   }).join('');
@@ -320,7 +428,7 @@ function renderGroups() {
 }
 
 function saveZone(zoneId, row, gid) {
-  const name = row.querySelector('.z-name').value.trim() || 'Lumina-Zone';
+  const name = row.querySelector('.z-name').value.trim() || t('defaultZoneName');
   const overrides = {};
   row.querySelectorAll('input[type=number]').forEach(inp => {
     const raw = inp.value.trim();
@@ -334,13 +442,12 @@ function saveZone(zoneId, row, gid) {
     overrides.nightColor = zColorVal.toLowerCase();
   }
   Homey.api('POST', '/zones/update', { zoneId, name, overrides }, (err) => {
-    if (err) { setStatus('Zone speichern fehlgeschlagen: ' + err, 'error'); return; }
+    if (err) { setStatus(t('zoneSaveFailed') + err, 'error'); return; }
     // Refresh local zones cache so subsequent re-renders show the new name.
     const z = zones.find(z => z.id === zoneId);
     if (z) { z.name = name; z.overrides = overrides; }
-    // Update the visible label in the head
     row.querySelector('.zone-name').textContent = name;
-    setStatus(`Zone "${name}" gespeichert.`, 'ok');
+    setStatus(t('zoneSaved', { name }), 'ok');
   });
 }
 
@@ -375,15 +482,15 @@ function refreshZoneCurve(row, group) {
 }
 
 function assignZone(zoneId, groupId) {
-  setStatus(`Verschiebe Zone in Gruppe "${groups[groupId]?.name || groupId}"…`, 'ok');
+  setStatus(t('zoneMoving', { name: groups[groupId]?.name || groupId }), 'ok');
   Homey.api('POST', '/zones/assign', { zoneId, groupId }, (err) => {
-    if (err) { setStatus('Zuweisung fehlgeschlagen: ' + err, 'error'); return; }
+    if (err) { setStatus(t('zoneMoveFailed') + err, 'error'); return; }
     // Reload zone list to reflect the new assignment.
     Homey.api('GET', '/zones', null, (e, zs) => {
       if (!e && Array.isArray(zs)) {
         zones = zs;
         renderGroups();
-        setStatus('Zone verschoben.', 'ok');
+        setStatus(t('zoneMoved'), 'ok');
       }
     });
   });
@@ -456,18 +563,12 @@ function renderCurveSvg(data, day) {
 
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;">
-      <!-- Brightness curve (lighter, underlay) -->
       <path d="${dimPath}" fill="#cbd5e1" opacity="0.45"/>
-      <!-- Kelvin curve (amber) -->
       <path d="${kelvinPath}" fill="#f59e0b" opacity="0.75"/>
-      <!-- Horizon line at the bottom -->
       <line x1="${padL}" y1="${baseY}" x2="${W - padR}" y2="${baseY}" stroke="#999" stroke-width="0.5"/>
-      <!-- Hour ticks -->
       ${ticks}
-      <!-- Sunrise/sunset notches -->
       ${sunMark(data.sunriseHour, '#f59e0b')}
       ${sunMark(data.sunsetHour, '#475569')}
-      <!-- Now line -->
       <line x1="${nowX.toFixed(1)}" y1="${padT}" x2="${nowX.toFixed(1)}" y2="${baseY}" stroke="#111" stroke-width="1"/>
       <circle cx="${nowX.toFixed(1)}" cy="${yForKelvin(nowPoint.kelvin).toFixed(1)}" r="3" fill="#111"/>
       <text x="${nowX.toFixed(1)}" y="${padT - 2}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${nowPoint.kelvin}K / ${nowPoint.dimPct}%</text>
@@ -476,7 +577,7 @@ function renderCurveSvg(data, day) {
 }
 
 function saveGroup(gid, card) {
-  const updated = { name: card.querySelector('.g-name').value.trim() || 'Gruppe' };
+  const updated = { name: card.querySelector('.g-name').value.trim() || t('defaultGroupName') };
   for (const f of FIELDS) {
     const el = card.querySelector(`input[data-key="${f.key}"]`);
     if (el) updated[f.key] = Number(el.value);
@@ -488,8 +589,8 @@ function saveGroup(gid, card) {
   }
   groups[gid] = updated;
   Homey.set('groups', groups, (err) => {
-    if (err) { setStatus('Speichern fehlgeschlagen: ' + err, 'error'); return; }
-    setStatus(`Gruppe "${updated.name}" gespeichert.`, 'ok');
+    if (err) { setStatus(t('saveFailed') + err, 'error'); return; }
+    setStatus(t('groupSaved', { name: updated.name }), 'ok');
     refreshCurve(card, updated);
   });
 }
@@ -497,23 +598,32 @@ function saveGroup(gid, card) {
 function deleteGroup(gid) {
   // Browser-native confirm() is sandboxed inside Homey's settings iframe and
   // silently rejects -- use Homey's own confirm dialog instead.
-  Homey.confirm(`Gruppe "${groups[gid]?.name || gid}" wirklich löschen?`, 'warning', (err, ok) => {
+  Homey.confirm(t('deleteConfirm', { name: groups[gid]?.name || gid }), 'warning', (err, ok) => {
     if (err || !ok) return;
     delete groups[gid];
     Homey.set('groups', groups, (e) => {
-      if (e) { setStatus('Löschen fehlgeschlagen: ' + e, 'error'); return; }
-      setStatus('Gruppe gelöscht.', 'ok');
+      if (e) { setStatus(t('deleteFailed') + e, 'error'); return; }
+      setStatus(t('deleted'), 'ok');
       renderGroups();
     });
   });
 }
 
+// Localise every element flagged with data-i18n at boot. Cheap and avoids the
+// initial flash of untranslated English content if the user is on a DE Homey.
+function applyStaticI18n() {
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    el.textContent = t(el.dataset.i18n);
+  }
+}
+
 // Homey's settings framework calls this global function once ready.
 function onHomeyReady(Homey) {
   Homey.ready();
+  applyStaticI18n();
 
   Homey.api('GET', '/fields', null, (err, fields) => {
-    if (err) { setStatus('Felder laden fehlgeschlagen: ' + err, 'error'); return; }
+    if (err) { setStatus(t('fieldsLoadFailed') + err, 'error'); return; }
     FIELDS = fields || [];
     Homey.get('tickSeconds', (e, v) => { if (!e && v != null) document.getElementById('tickSeconds').value = v; });
     Homey.get('respectManualChanges', (e, v) => { if (!e && v != null) document.getElementById('respectManualChanges').checked = v !== false; });
@@ -530,25 +640,25 @@ function onHomeyReady(Homey) {
     const tick = Number(document.getElementById('tickSeconds').value);
     const respect = document.getElementById('respectManualChanges').checked;
     if (!isFinite(tick) || tick < 30 || tick > 1800) {
-      setStatus('Intervall muss zwischen 30 und 1800 Sekunden liegen.', 'error'); return;
+      setStatus(t('rangeError'), 'error'); return;
     }
     Homey.set('tickSeconds', tick, (e) => {
-      if (e) { setStatus('Speichern fehlgeschlagen: ' + e, 'error'); return; }
+      if (e) { setStatus(t('saveFailed') + e, 'error'); return; }
       Homey.set('respectManualChanges', respect, (e2) => {
-        if (e2) { setStatus('Speichern fehlgeschlagen: ' + e2, 'error'); return; }
-        setStatus('Globale Einstellungen gespeichert.', 'ok');
+        if (e2) { setStatus(t('saveFailed') + e2, 'error'); return; }
+        setStatus(t('globalSaved'), 'ok');
       });
     });
   });
 
   document.getElementById('addGroup').addEventListener('click', () => {
     const id = 'g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-    const fresh = { name: 'Neue Gruppe' };
+    const fresh = { name: t('newGroupName') };
     for (const f of FIELDS) fresh[f.key] = f.defaultValue;
     groups[id] = fresh;
     Homey.set('groups', groups, (err) => {
-      if (err) { setStatus('Anlegen fehlgeschlagen: ' + err, 'error'); return; }
-      setStatus('Neue Gruppe angelegt.', 'ok');
+      if (err) { setStatus(t('createFailed') + err, 'error'); return; }
+      setStatus(t('groupCreated'), 'ok');
       renderGroups();
     });
   });
