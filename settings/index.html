@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script type="application/javascript" src="/homey.js" data-origin="settings"></script>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 1.5em; color: #333; max-width: 760px; }
+  h2 { margin-top: 0; }
+  h3 { margin-top: 2em; margin-bottom: .4em; }
+  p.hint { color: #666; font-size: .9em; line-height: 1.4; }
+  .row { display: flex; gap: 1em; margin: .5em 0; align-items: center; }
+  .row label { flex: 1; }
+  .row input[type=number] { padding: .4em; border: 1px solid #ddd; border-radius: 4px; text-align: right; width: 110px; }
+  .row input[type=text] { padding: .5em; border: 1px solid #ddd; border-radius: 4px; flex: 1; }
+  .row input[type=checkbox] { transform: scale(1.3); }
+  button { background: #f59e0b; color: white; border: 0; padding: .5em 1em; border-radius: 6px; font-size: .95em; cursor: pointer; }
+  button.secondary { background: #888; }
+  button.danger { background: #c00; }
+  button.tertiary { background: #eee; color: #333; border: 1px solid #ccc; }
+  .group-card { border: 1px solid #eee; border-radius: 8px; padding: 1em 1.2em; margin: 1em 0; background: #fafafa; }
+  .group-card h4 input { width: 100%; font-size: 1em; padding: .35em .5em; border: 1px solid #ddd; border-radius: 4px; }
+  .group-card .section-label { margin: .8em 0 .3em; font-weight: 600; color: #555; font-size: .9em; }
+  .group-card .field-row { display: flex; gap: 1em; align-items: center; margin: .25em 0; }
+  .group-card .field-row label { flex: 1; color: #555; font-size: .9em; }
+  .group-card .field-row input[type=number] { width: 110px; padding: .35em; border: 1px solid #ddd; border-radius: 4px; text-align: right; }
+  .group-card .field-row input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: transparent; }
+  .group-card .field-row input[type=checkbox] { width: auto; transform: scale(1.2); margin-right: .4em; }
+  .color-row { display: flex; gap: .5em; align-items: center; margin: .25em 0; }
+  .color-row label { flex: 1; color: #555; font-size: .9em; }
+  .color-row .picker-wrap { display: flex; gap: .4em; align-items: center; }
+  .color-row .picker-wrap.off > input[type=color] { visibility: hidden; }
+  .group-card .actions { margin-top: 1em; display: flex; gap: .5em; justify-content: flex-end; }
+  .curve-card { background: #fff; border: 1px solid #eee; border-radius: 6px; padding: .6em .8em; margin: .8em 0; }
+  .curve-card .curve-meta { display: flex; gap: 1em; font-size: .8em; color: #666; margin-bottom: .2em; }
+  .curve-card .curve-meta strong { color: #222; }
+  .curve-card svg { width: 100%; height: auto; display: block; }
+  .zone-row { padding: .3em 0; }
+  .zone-row .zone-head { display: flex; align-items: center; gap: .5em; cursor: pointer; }
+  .zone-row .zone-head .chev { font-size: .8em; color: #888; width: .8em; display: inline-block; }
+  .zone-row .zone-head .zone-name { flex: 1; }
+  .zone-row .zone-edit { display: none; padding: .8em .6em .4em; background: #fafafa; border-radius: 6px; margin: .4em 0; }
+  .zone-row.open .zone-edit { display: block; }
+  .zone-row.open .zone-head .chev { transform: rotate(90deg); display: inline-block; }
+  .zone-row .zone-edit input[type=text] { width: 100%; padding: .4em; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; margin-bottom: .6em; }
+  .zone-row .zone-edit .field-row input[type=number] { width: 110px; padding: .35em; border: 1px solid #ddd; border-radius: 4px; text-align: right; }
+  .zone-row .zone-edit .group-val { color: #999; font-size: .8em; margin-left: .5em; }
+  .zone-row .zone-edit .actions { margin-top: .8em; display: flex; gap: .4em; justify-content: flex-end; }
+  #status { margin-top: 1em; padding: .6em; border-radius: 4px; font-size: .9em; display: none; }
+  #status.ok { background: #efe; color: #060; display: block; }
+  #status.error { background: #fee; color: #c00; display: block; }
+</style>
+</head>
+<body>
+
+<h2>Lumina</h2>
+
+<h3>Globaler Tick</h3>
+<div class="row">
+  <label>
+    Update-Intervall (Sekunden)
+    <div style="font-size:.85em; color:#999;">Wie oft die App den Sonnenstand neu berechnet. Lampen blenden zwischen Updates smooth, 300 s reichen.</div>
+  </label>
+  <input type="number" id="tickSeconds" min="30" max="1800" step="30" value="300">
+</div>
+<div class="row">
+  <label>
+    Manuelle Änderungen respektieren
+    <div style="font-size:.85em; color:#999;">Verändert ein Nutzer eine Lampe manuell, pausiert die App diese eine Lampe bis sie aus- und wieder eingeschaltet wird.</div>
+  </label>
+  <input type="checkbox" id="respectManualChanges" checked>
+</div>
+<div style="margin-top:.8em;">
+  <button id="saveGlobal">Speichern</button>
+</div>
+
+<h3>Gruppen</h3>
+<p class="hint">
+  Gruppen bündeln Default-Werte und enthalten die zugewiesenen Zonen. Eine Zone in eine andere
+  Gruppe verschieben übernimmt deren Werte als neue Defaults für die Zone (eigene Anpassungen in den
+  Zone-Einstellungen gehen dabei verloren).
+</p>
+
+<div id="groups"></div>
+
+<button id="addGroup" class="tertiary">+ Neue Gruppe</button>
+
+<div id="status"></div>
+
+<script>
+const status = document.getElementById('status');
+const setStatus = (msg, kind='ok') => { status.textContent = msg; status.className = kind; };
+
+let groups = {};
+let FIELDS = []; // fetched from app via /fields
+let zones = []; // [{id, name, groupId}] from /zones
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+// Renders the "Farbiges Nachtlicht"-Row used in both group and zone editors.
+// scope is 'g' (group) or 'z' (zone) and is used to namespace the classes so
+// the row-level query selectors don't accidentally pick up the wrong inputs.
+// `hex` is the currently stored value (or '' for "off"); `inheritedHex` is the
+// fallback shown as a small swatch when this row is in the zone editor and
+// the group already has a color configured.
+function renderNightColorRow({ scope, hex, labelOn, inheritedHex }) {
+  const on = !!hex;
+  const value = hex || inheritedHex || '#ff5500';
+  const inheritHtml = inheritedHex
+    ? `<span class="group-val" style="display:flex;align-items:center;gap:.3em;">
+         → erbt:
+         <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${escapeHtml(inheritedHex)};border:1px solid #ccc;"></span>
+       </span>`
+    : '';
+  return `<div class="color-row">
+    <label>
+      <input type="checkbox" class="${scope}-night-color-on" ${on ? 'checked' : ''}>
+      ${escapeHtml(labelOn)}
+    </label>
+    <div class="picker-wrap ${on ? '' : 'off'}">
+      <input type="color" class="${scope}-night-color" value="${escapeHtml(value)}">
+      ${inheritHtml}
+    </div>
+  </div>`;
+}
+
+function renderGroups() {
+  const box = document.getElementById('groups');
+  const keys = Object.keys(groups);
+  if (!keys.length) {
+    box.innerHTML = '<p class="hint" style="font-style:italic;">Noch keine Gruppen — leg eine an.</p>';
+    return;
+  }
+  box.innerHTML = keys.map(gid => {
+    const g = groups[gid];
+    const sections = {};
+    for (const f of FIELDS) {
+      sections[f.section] = sections[f.section] || [];
+      sections[f.section].push(f);
+    }
+    const sectionTitle = { day: 'Tag', night: 'Nacht' };
+    const sectionsHtml = Object.entries(sections).map(([sec, fields]) => {
+      const fieldsHtml = fields.map(f =>
+        `<div class="field-row">
+           <label>${escapeHtml(f.label.de)}${f.unit ? ' ('+f.unit+')' : ''}</label>
+           <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" value="${g[f.key] ?? f.defaultValue}">
+         </div>`
+      ).join('');
+      // The night section gets an optional color picker: when active it
+      // overrides Kelvin with a fixed RGB color (only applied on lamps that
+      // support light_hue + light_saturation; others fall back to Kelvin).
+      const extra = sec === 'night' ? renderNightColorRow({
+        scope: 'g',
+        hex: g.nightColor || '',
+        labelOn: 'Farbiges Nachtlicht statt Kelvin',
+      }) : '';
+      return `<div class="section-label">${sectionTitle[sec] || sec}</div>${fieldsHtml}${extra}`;
+    }).join('');
+
+    // Zones currently in this group, and zones available to add (i.e. in
+    // other groups).
+    // Each zone has exactly one groupId at any time. "inGroup" = zones whose
+    // current groupId equals this card's gid. "elsewhere" = zones currently
+    // in some other group; selecting one of them MOVES it here (the old group
+    // automatically loses it).
+    const inGroup = zones.filter(z => z.groupId === gid);
+    const elsewhere = zones.filter(z => z.groupId !== gid);
+
+    const zoneEditorFields = FIELDS.map(f => {
+      const groupVal = g[f.key] ?? f.defaultValue;
+      const unit = f.unit ? ` (${f.unit})` : '';
+      return `<div class="field-row">
+        <label>${escapeHtml(f.label.de)}${unit}</label>
+        <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" placeholder="erbt: ${groupVal}">
+        <span class="group-val">→ ${groupVal}${f.unit || ''}</span>
+      </div>`;
+    }).join('');
+    // Zone-level color override: if the group already has a night color the
+    // hint shows it as the inheritable default. The checkbox enables the
+    // zone-specific override only.
+    const zoneColorRow = renderNightColorRow({
+      scope: 'z',
+      hex: '',
+      labelOn: 'Eigene Nachtfarbe (überschreibt Gruppe)',
+      inheritedHex: g.nightColor || '',
+    });
+
+    const zonesListHtml = inGroup.length
+      ? inGroup.map(z =>
+          `<div class="zone-row" data-zid="${escapeHtml(z.id)}">
+             <div class="zone-head">
+               <span class="chev">▶</span>
+               <span class="zone-name">${escapeHtml(z.name)}</span>
+               <button class="tertiary z-remove" style="margin-left:auto;">Entfernen</button>
+             </div>
+             <div class="zone-edit">
+               <input type="text" class="z-name" value="${escapeHtml(z.name)}" placeholder="Name">
+               ${zoneEditorFields}
+               ${zoneColorRow}
+               <div class="curve-card" data-zone-curve>
+                 <div class="curve-meta">
+                   <span>jetzt: <strong class="curve-now">—</strong></span>
+                   <span>↑ <strong class="curve-sunrise">—</strong></span>
+                   <span>↓ <strong class="curve-sunset">—</strong></span>
+                 </div>
+                 <div class="curve-svg"></div>
+               </div>
+               <div class="actions">
+                 <button class="z-save">Zone speichern</button>
+               </div>
+             </div>
+           </div>`
+        ).join('')
+      : '<div style="color:#999; font-size:.9em; padding:.4em 0;">Keine Zonen zugewiesen.</div>';
+    const elsewhereOpts = elsewhere.map(z =>
+      `<option value="${escapeHtml(z.id)}">${escapeHtml(z.name)} (aktuell: ${escapeHtml(groups[z.groupId]?.name || z.groupId || '—')})</option>`
+    ).join('');
+
+    return `
+      <div class="group-card" data-id="${gid}">
+        <h4><input type="text" class="g-name" value="${escapeHtml(g.name || '')}" placeholder="Name"></h4>
+        <div class="curve-card" data-curve-for="${gid}">
+          <div class="curve-meta">
+            <span>jetzt: <strong class="curve-now">—</strong></span>
+            <span>↑ <strong class="curve-sunrise">—</strong></span>
+            <span>↓ <strong class="curve-sunset">—</strong></span>
+          </div>
+          <div class="curve-svg"></div>
+        </div>
+        ${sectionsHtml}
+        <div class="section-label">Zugewiesene Zonen</div>
+        ${zonesListHtml}
+        ${elsewhere.length ? `
+          <div class="field-row" style="margin-top:.4em;">
+            <select class="z-add" style="flex:1; padding:.4em; border:1px solid #ddd; border-radius:4px;">
+              <option value="">— Zone aus anderer Gruppe hierher verschieben —</option>
+              ${elsewhereOpts}
+            </select>
+          </div>` : ''}
+        <div class="actions">
+          <button class="danger g-delete">Löschen</button>
+          <button class="g-save">Speichern</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  box.querySelectorAll('.group-card').forEach(card => {
+    const gid = card.dataset.id;
+    card.querySelector('.g-save').addEventListener('click', () => saveGroup(gid, card));
+    card.querySelector('.g-delete').addEventListener('click', () => deleteGroup(gid));
+    // Group-level color toggle: show/hide the picker. The picker stays in the
+    // DOM (just hidden) so its current value is preserved if the user toggles
+    // it off and on again.
+    const gColorOn = card.querySelector('.g-night-color-on');
+    const gColorWrap = card.querySelector('.color-row .picker-wrap');
+    if (gColorOn && gColorWrap) {
+      gColorOn.addEventListener('change', () => {
+        gColorWrap.classList.toggle('off', !gColorOn.checked);
+      });
+    }
+    refreshCurve(card, groups[gid]);
+
+    // Zone-level handlers: expand/collapse, override editor, per-zone curve.
+    card.querySelectorAll('.zone-row').forEach(row => {
+      const zid = row.dataset.zid;
+      const zone = zones.find(z => z.id === zid);
+      // Pre-fill the override fields with the zone's current overrides.
+      if (zone?.overrides) {
+        for (const [k, v] of Object.entries(zone.overrides)) {
+          if (k === 'nightColor') continue; // handled separately below
+          const inp = row.querySelector(`input[data-key="${k}"]`);
+          if (inp && v != null) inp.value = v;
+        }
+        if (typeof zone.overrides.nightColor === 'string') {
+          const cb = row.querySelector('.z-night-color-on');
+          const pk = row.querySelector('.z-night-color');
+          const wrap = row.querySelector('.color-row .picker-wrap');
+          if (cb && pk && wrap) {
+            cb.checked = true;
+            pk.value = zone.overrides.nightColor;
+            wrap.classList.remove('off');
+          }
+        }
+      }
+      // Zone-level color toggle (mirror of the group-level handler above).
+      const zColorOn = row.querySelector('.z-night-color-on');
+      const zColorWrap = row.querySelector('.color-row .picker-wrap');
+      if (zColorOn && zColorWrap) {
+        zColorOn.addEventListener('change', () => {
+          zColorWrap.classList.toggle('off', !zColorOn.checked);
+        });
+      }
+      row.querySelector('.zone-head').addEventListener('click', (ev) => {
+        if (ev.target.closest('.z-remove')) return; // remove button handled below
+        const wasOpen = row.classList.contains('open');
+        // Close other open rows in this card -- one open editor at a time.
+        card.querySelectorAll('.zone-row.open').forEach(r => r.classList.remove('open'));
+        if (!wasOpen) {
+          row.classList.add('open');
+          refreshZoneCurve(row, groups[gid]);
+        }
+      });
+      row.querySelector('.z-remove').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        assignZone(zid, 'default');
+      });
+      row.querySelector('.z-save').addEventListener('click', () => saveZone(zid, row, gid));
+      // Live curve update on any override input change
+      row.querySelectorAll('input[type=number]').forEach(inp =>
+        inp.addEventListener('input', () => refreshZoneCurveDebounced(row, groups[gid]))
+      );
+    });
+
+    const addSelect = card.querySelector('.z-add');
+    if (addSelect) addSelect.addEventListener('change', () => {
+      const zid = addSelect.value;
+      if (!zid) return;
+      assignZone(zid, gid);
+    });
+  });
+}
+
+function saveZone(zoneId, row, gid) {
+  const name = row.querySelector('.z-name').value.trim() || 'Lumina-Zone';
+  const overrides = {};
+  row.querySelectorAll('input[type=number]').forEach(inp => {
+    const raw = inp.value.trim();
+    if (raw === '') return;
+    const n = Number(raw);
+    if (Number.isFinite(n)) overrides[inp.dataset.key] = n;
+  });
+  const zColorOn = row.querySelector('.z-night-color-on');
+  const zColorVal = row.querySelector('.z-night-color')?.value;
+  if (zColorOn?.checked && /^#[0-9a-f]{6}$/i.test(zColorVal || '')) {
+    overrides.nightColor = zColorVal.toLowerCase();
+  }
+  Homey.api('POST', '/zones/update', { zoneId, name, overrides }, (err) => {
+    if (err) { setStatus('Zone speichern fehlgeschlagen: ' + err, 'error'); return; }
+    // Refresh local zones cache so subsequent re-renders show the new name.
+    const z = zones.find(z => z.id === zoneId);
+    if (z) { z.name = name; z.overrides = overrides; }
+    // Update the visible label in the head
+    row.querySelector('.zone-name').textContent = name;
+    setStatus(`Zone "${name}" gespeichert.`, 'ok');
+  });
+}
+
+// Debounced per-zone curve refresh while the user types.
+const zoneCurveTimers = new WeakMap();
+function refreshZoneCurveDebounced(row, group) {
+  clearTimeout(zoneCurveTimers.get(row));
+  zoneCurveTimers.set(row, setTimeout(() => refreshZoneCurve(row, group), 200));
+}
+function refreshZoneCurve(row, group) {
+  // Build the effective values: override (if user typed one) > group > default.
+  const eff = { day: {}, night: {} };
+  const dayKeys = { dayKelvinMin: 'kelvinMin', dayKelvinMax: 'kelvinMax', dayDimMin: 'dimMin', dayDimMax: 'dimMax' };
+  const nightKeys = { nightKelvin: 'kelvin', nightDim: 'dim' };
+  for (const f of FIELDS) {
+    const inp = row.querySelector(`input[data-key="${f.key}"]`);
+    const raw = inp ? inp.value.trim() : '';
+    const num = raw === '' ? null : Number(raw);
+    const value = Number.isFinite(num) ? num : (group[f.key] ?? f.defaultValue);
+    if (dayKeys[f.key]) eff.day[dayKeys[f.key]] = value;
+    else if (nightKeys[f.key]) eff.night[nightKeys[f.key]] = value;
+  }
+  Homey.api('POST', '/curve', eff, (err, data) => {
+    if (err || !data) return;
+    const card = row.querySelector('[data-zone-curve]');
+    if (!card) return;
+    card.querySelector('.curve-now').textContent = data.nowLabel;
+    card.querySelector('.curve-sunrise').textContent = data.sunriseLabel || '—';
+    card.querySelector('.curve-sunset').textContent = data.sunsetLabel || '—';
+    card.querySelector('.curve-svg').innerHTML = renderCurveSvg(data, eff.day);
+  });
+}
+
+function assignZone(zoneId, groupId) {
+  setStatus(`Verschiebe Zone in Gruppe "${groups[groupId]?.name || groupId}"…`, 'ok');
+  Homey.api('POST', '/zones/assign', { zoneId, groupId }, (err) => {
+    if (err) { setStatus('Zuweisung fehlgeschlagen: ' + err, 'error'); return; }
+    // Reload zone list to reflect the new assignment.
+    Homey.api('GET', '/zones', null, (e, zs) => {
+      if (!e && Array.isArray(zs)) {
+        zones = zs;
+        renderGroups();
+        setStatus('Zone verschoben.', 'ok');
+      }
+    });
+  });
+}
+
+// Fetches the 24h adaptive curve for a group's values from the backend
+// and renders it as an SVG inside the group card.
+function refreshCurve(card, group) {
+  const day = {
+    kelvinMin: Number(group.dayKelvinMin),
+    kelvinMax: Number(group.dayKelvinMax),
+    dimMin: Number(group.dayDimMin),
+    dimMax: Number(group.dayDimMax),
+  };
+  const night = {
+    kelvin: Number(group.nightKelvin),
+    dim: Number(group.nightDim),
+  };
+  Homey.api('POST', '/curve', { day, night }, (err, data) => {
+    if (err || !data) return;
+    const meta = card.querySelector('.curve-card');
+    if (!meta) return;
+    meta.querySelector('.curve-now').textContent = data.nowLabel;
+    meta.querySelector('.curve-sunrise').textContent = data.sunriseLabel || '—';
+    meta.querySelector('.curve-sunset').textContent = data.sunsetLabel || '—';
+    meta.querySelector('.curve-svg').innerHTML = renderCurveSvg(data, day);
+  });
+}
+
+// Builds the SVG markup. Two filled curves:
+//   - Kelvin (amber) on its own y-axis (1500K-6500K)
+//   - Brightness (slate, lighter) on its own y-axis (0-100%)
+// Plus a vertical "now" marker with current kelvin/dim labels and
+// sunrise/sunset position markers along the bottom axis.
+function renderCurveSvg(data, day) {
+  const W = 320, H = 140;
+  const padL = 8, padR = 8, padT = 14, padB = 24;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const xForHour = (h) => padL + (h / 24) * innerW;
+  const yForKelvin = (k) => padT + (1 - (k - 1500) / (6500 - 1500)) * innerH;
+  const yForDim = (d) => padT + (1 - d / 100) * innerH;
+
+  // Build polygon paths (filled area down to bottom).
+  const baseY = padT + innerH;
+  const kelvinPath = data.points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xForHour(p.hour).toFixed(1)} ${yForKelvin(p.kelvin).toFixed(1)}`
+  ).join(' ') + ` L ${xForHour(24).toFixed(1)} ${baseY} L ${xForHour(0).toFixed(1)} ${baseY} Z`;
+  const dimPath = data.points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xForHour(p.hour).toFixed(1)} ${yForDim(p.dimPct).toFixed(1)}`
+  ).join(' ') + ` L ${xForHour(24).toFixed(1)} ${baseY} L ${xForHour(0).toFixed(1)} ${baseY} Z`;
+
+  // Find current values by snapping to the most-recently-passed quarter-hour
+  // sample. Floor (not round) so at 23:59 we still show the day's last point
+  // rather than rolling into the next day's anchor.
+  const idx = Math.min(data.points.length - 1, Math.max(0, Math.floor(data.nowHour * 4)));
+  const nowPoint = data.points[idx];
+  const nowX = xForHour(data.nowHour);
+
+  // Hour ticks at 0, 6, 12, 18, 24
+  const ticks = [0, 6, 12, 18, 24].map(h => {
+    const x = xForHour(h);
+    return `<text x="${x}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#888">${h}</text>`;
+  }).join('');
+
+  // Sunrise/sunset markers
+  const sunMark = (h, fill) => h == null ? '' :
+    `<line x1="${xForHour(h).toFixed(1)}" y1="${baseY}" x2="${xForHour(h).toFixed(1)}" y2="${baseY + 6}" stroke="${fill}" stroke-width="2"/>`;
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;">
+      <!-- Brightness curve (lighter, underlay) -->
+      <path d="${dimPath}" fill="#cbd5e1" opacity="0.45"/>
+      <!-- Kelvin curve (amber) -->
+      <path d="${kelvinPath}" fill="#f59e0b" opacity="0.75"/>
+      <!-- Horizon line at the bottom -->
+      <line x1="${padL}" y1="${baseY}" x2="${W - padR}" y2="${baseY}" stroke="#999" stroke-width="0.5"/>
+      <!-- Hour ticks -->
+      ${ticks}
+      <!-- Sunrise/sunset notches -->
+      ${sunMark(data.sunriseHour, '#f59e0b')}
+      ${sunMark(data.sunsetHour, '#475569')}
+      <!-- Now line -->
+      <line x1="${nowX.toFixed(1)}" y1="${padT}" x2="${nowX.toFixed(1)}" y2="${baseY}" stroke="#111" stroke-width="1"/>
+      <circle cx="${nowX.toFixed(1)}" cy="${yForKelvin(nowPoint.kelvin).toFixed(1)}" r="3" fill="#111"/>
+      <text x="${nowX.toFixed(1)}" y="${padT - 2}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${nowPoint.kelvin}K / ${nowPoint.dimPct}%</text>
+    </svg>
+  `;
+}
+
+function saveGroup(gid, card) {
+  const updated = { name: card.querySelector('.g-name').value.trim() || 'Gruppe' };
+  for (const f of FIELDS) {
+    const el = card.querySelector(`input[data-key="${f.key}"]`);
+    if (el) updated[f.key] = Number(el.value);
+  }
+  const gColorOn = card.querySelector('.g-night-color-on');
+  const gColorVal = card.querySelector('.g-night-color')?.value;
+  if (gColorOn?.checked && /^#[0-9a-f]{6}$/i.test(gColorVal || '')) {
+    updated.nightColor = gColorVal.toLowerCase();
+  }
+  groups[gid] = updated;
+  Homey.set('groups', groups, (err) => {
+    if (err) { setStatus('Speichern fehlgeschlagen: ' + err, 'error'); return; }
+    setStatus(`Gruppe "${updated.name}" gespeichert.`, 'ok');
+    refreshCurve(card, updated);
+  });
+}
+
+function deleteGroup(gid) {
+  // Browser-native confirm() is sandboxed inside Homey's settings iframe and
+  // silently rejects -- use Homey's own confirm dialog instead.
+  Homey.confirm(`Gruppe "${groups[gid]?.name || gid}" wirklich löschen?`, 'warning', (err, ok) => {
+    if (err || !ok) return;
+    delete groups[gid];
+    Homey.set('groups', groups, (e) => {
+      if (e) { setStatus('Löschen fehlgeschlagen: ' + e, 'error'); return; }
+      setStatus('Gruppe gelöscht.', 'ok');
+      renderGroups();
+    });
+  });
+}
+
+// Homey's settings framework calls this global function once ready.
+function onHomeyReady(Homey) {
+  Homey.ready();
+
+  Homey.api('GET', '/fields', null, (err, fields) => {
+    if (err) { setStatus('Felder laden fehlgeschlagen: ' + err, 'error'); return; }
+    FIELDS = fields || [];
+    Homey.get('tickSeconds', (e, v) => { if (!e && v != null) document.getElementById('tickSeconds').value = v; });
+    Homey.get('respectManualChanges', (e, v) => { if (!e && v != null) document.getElementById('respectManualChanges').checked = v !== false; });
+    Homey.get('groups', (e, v) => {
+      groups = (typeof v === 'object' && v) ? v : {};
+      Homey.api('GET', '/zones', null, (e2, zs) => {
+        zones = (!e2 && Array.isArray(zs)) ? zs : [];
+        renderGroups();
+      });
+    });
+  });
+
+  document.getElementById('saveGlobal').addEventListener('click', () => {
+    const tick = Number(document.getElementById('tickSeconds').value);
+    const respect = document.getElementById('respectManualChanges').checked;
+    if (!isFinite(tick) || tick < 30 || tick > 1800) {
+      setStatus('Intervall muss zwischen 30 und 1800 Sekunden liegen.', 'error'); return;
+    }
+    Homey.set('tickSeconds', tick, (e) => {
+      if (e) { setStatus('Speichern fehlgeschlagen: ' + e, 'error'); return; }
+      Homey.set('respectManualChanges', respect, (e2) => {
+        if (e2) { setStatus('Speichern fehlgeschlagen: ' + e2, 'error'); return; }
+        setStatus('Globale Einstellungen gespeichert.', 'ok');
+      });
+    });
+  });
+
+  document.getElementById('addGroup').addEventListener('click', () => {
+    const id = 'g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const fresh = { name: 'Neue Gruppe' };
+    for (const f of FIELDS) fresh[f.key] = f.defaultValue;
+    groups[id] = fresh;
+    Homey.set('groups', groups, (err) => {
+      if (err) { setStatus('Anlegen fehlgeschlagen: ' + err, 'error'); return; }
+      setStatus('Neue Gruppe angelegt.', 'ok');
+      renderGroups();
+    });
+  });
+}
+</script>
+</body>
+</html>

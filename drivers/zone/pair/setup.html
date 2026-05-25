@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 1.5em; color: #333; }
+  h3 { margin-top: 1.5em; margin-bottom: .4em; color: #555; font-size: 1em; font-weight: 600; }
+  input[type=text], input[type=number], select { padding: .5em; font-size: 1em; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+  .name-row, .group-row { width: 100%; }
+  .num-row { display: flex; gap: 1em; margin: .4em 0; align-items: center; }
+  .num-row label { flex: 1; color: #555; font-size: .9em; }
+  .num-row input { width: 120px; text-align: right; }
+  .num-row .group-val { color: #999; font-size: .8em; margin-left: .5em; min-width: 80px; }
+  .hint { color: #888; font-size: .85em; margin: -.2em 0 .8em; }
+  .actions { margin-top: 2em; }
+  button { background: #f59e0b; color: white; border: 0; padding: .8em 1.6em; border-radius: 6px; font-size: 1em; cursor: pointer; width: 100%; }
+  #status { margin-top: 1em; padding: .5em; border-radius: 4px; font-size: .85em; display: none; }
+  #status.error { background: #fee; color: #c00; display: block; }
+  #status.ok { background: #efe; color: #060; display: block; }
+  .curve-card { background: #fff; border: 1px solid #eee; border-radius: 6px; padding: .6em .8em; margin: .8em 0 1.4em; }
+  .curve-card .curve-meta { display: flex; gap: 1em; font-size: .8em; color: #666; margin-bottom: .2em; }
+  .curve-card .curve-meta strong { color: #222; }
+  .curve-card svg { width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+
+<h3>Name</h3>
+<input type="text" id="name" class="name-row" placeholder="z.B. Wohnbereich" />
+
+<h3>Gruppe</h3>
+<select id="groupId" class="group-row"></select>
+<p class="hint">Gruppen verwalten unter Apps → Lumina → Konfigurieren.</p>
+
+<div class="curve-card" id="curveCard" style="display:none;">
+  <div class="curve-meta">
+    <span>jetzt: <strong class="curve-now">—</strong></span>
+    <span>↑ <strong class="curve-sunrise">—</strong></span>
+    <span>↓ <strong class="curve-sunset">—</strong></span>
+  </div>
+  <div class="curve-svg"></div>
+</div>
+
+<p class="hint">
+  Nach dem Anlegen verschiebst du dieses Gerät in den Homey-Bereich, den es steuern soll.
+  Alle Lampen darin (rekursiv) werden adaptiv gesteuert.
+</p>
+
+<div id="fieldSections"></div>
+
+<div class="actions">
+  <button id="submit">Weiter zur Bestätigung</button>
+</div>
+<div id="status"></div>
+
+<script>
+const status = document.getElementById('status');
+const showStatus = (msg, kind='ok') => { status.textContent = msg; status.className = kind; };
+
+let isRepair = false;
+let FIELDS = [];
+let groups = {};
+let initialOverrides = {};
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+function renderGroupOptions(selectedId) {
+  const sel = document.getElementById('groupId');
+  const entries = Object.entries(groups);
+  let html = '<option value="">— keine Gruppe —</option>';
+  for (const [gid, g] of entries) {
+    const sel = gid === selectedId ? ' selected' : '';
+    html += `<option value="${escapeHtml(gid)}"${sel}>${escapeHtml(g.name || gid)}</option>`;
+  }
+  sel.innerHTML = html;
+  if (selectedId) sel.value = selectedId;
+}
+
+function renderFields() {
+  const box = document.getElementById('fieldSections');
+  const sectionTitle = { day: 'Tagkurve', night: 'Nachtwerte' };
+  const bySection = {};
+  for (const f of FIELDS) {
+    bySection[f.section] = bySection[f.section] || [];
+    bySection[f.section].push(f);
+  }
+  box.innerHTML = Object.entries(bySection).map(([sec, fields]) => {
+    const rowsHtml = fields.map(f => `
+      <div class="num-row">
+        <label>${escapeHtml(f.label.de)}${f.unit ? ' ('+f.unit+')' : ''}</label>
+        <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" placeholder="erbt">
+        <span class="group-val" data-key-val="${f.key}"></span>
+      </div>
+    `).join('');
+    return `<h3>${sectionTitle[sec] || sec}</h3>
+      <p class="hint">Leer = aus Gruppe übernehmen. Wert eintragen = überschreiben.</p>
+      ${rowsHtml}`;
+  }).join('');
+  applyOverrides();
+  updateGroupPlaceholders();
+}
+
+function applyOverrides() {
+  for (const f of FIELDS) {
+    const el = document.querySelector(`input[data-key="${f.key}"]`);
+    if (!el) continue;
+    const v = initialOverrides[f.key];
+    el.value = (v == null) ? '' : v;
+  }
+}
+
+function updateGroupPlaceholders() {
+  const gid = document.getElementById('groupId').value;
+  const g = gid ? groups[gid] : null;
+  for (const f of FIELDS) {
+    const el = document.querySelector(`input[data-key="${f.key}"]`);
+    const span = document.querySelector(`span[data-key-val="${f.key}"]`);
+    if (!el || !span) continue;
+    if (g && g[f.key] != null) {
+      el.placeholder = 'erbt: ' + g[f.key];
+      span.textContent = '→ ' + g[f.key] + (f.unit || '');
+    } else {
+      el.placeholder = 'kein Gruppen-Wert — Default ' + f.defaultValue;
+      span.textContent = '→ ' + f.defaultValue + (f.unit || '');
+    }
+  }
+}
+
+function collectPayload() {
+  const overrides = {};
+  for (const f of FIELDS) {
+    const el = document.querySelector(`input[data-key="${f.key}"]`);
+    if (!el) continue;
+    const raw = el.value.trim();
+    if (raw === '') continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) overrides[f.key] = n;
+  }
+  return {
+    name: document.getElementById('name').value || 'Adaptive Zone',
+    groupId: document.getElementById('groupId').value || '',
+    overrides,
+  };
+}
+
+let debounceTimer = null;
+function pushDraft() {
+  Homey.emit('save_draft', collectPayload(), (err) => {
+    if (err) showStatus('Fehler: ' + err, 'error');
+  });
+  refreshCurveDebounced();
+}
+function pushDraftDebounced() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(pushDraft, 250);
+}
+
+// --- Curve preview ---
+
+function buildCurveValues() {
+  const gid = document.getElementById('groupId').value;
+  const g = (gid && groups[gid]) || {};
+  const eff = {};
+  for (const f of FIELDS) {
+    const el = document.querySelector(`input[data-key="${f.key}"]`);
+    const raw = el ? el.value.trim() : '';
+    const num = raw === '' ? null : Number(raw);
+    if (Number.isFinite(num)) eff[f.key] = num;
+    else if (g[f.key] != null) eff[f.key] = g[f.key];
+    else eff[f.key] = f.defaultValue;
+  }
+  return {
+    day: { kelvinMin: eff.dayKelvinMin, kelvinMax: eff.dayKelvinMax, dimMin: eff.dayDimMin, dimMax: eff.dayDimMax },
+    night: { kelvin: eff.nightKelvin, dim: eff.nightDim },
+  };
+}
+
+let curveTimer = null;
+function refreshCurveDebounced() {
+  clearTimeout(curveTimer);
+  curveTimer = setTimeout(refreshCurve, 200);
+}
+function refreshCurve() {
+  if (!FIELDS.length) return;
+  const v = buildCurveValues();
+  Homey.emit('compute_curve', v, (err, data) => {
+    if (err || !data) return;
+    const card = document.getElementById('curveCard');
+    if (!card) return;
+    card.style.display = 'block';
+    card.querySelector('.curve-now').textContent = data.nowLabel;
+    card.querySelector('.curve-sunrise').textContent = data.sunriseLabel || '—';
+    card.querySelector('.curve-sunset').textContent = data.sunsetLabel || '—';
+    card.querySelector('.curve-svg').innerHTML = renderCurveSvg(data);
+  });
+}
+
+function renderCurveSvg(data) {
+  const W = 320, H = 140;
+  const padL = 8, padR = 8, padT = 14, padB = 24;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const xForHour = (h) => padL + (h / 24) * innerW;
+  const yForKelvin = (k) => padT + (1 - (k - 1500) / (6500 - 1500)) * innerH;
+  const yForDim = (d) => padT + (1 - d / 100) * innerH;
+  const baseY = padT + innerH;
+  const kelvinPath = data.points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xForHour(p.hour).toFixed(1)} ${yForKelvin(p.kelvin).toFixed(1)}`
+  ).join(' ') + ` L ${xForHour(24).toFixed(1)} ${baseY} L ${xForHour(0).toFixed(1)} ${baseY} Z`;
+  const dimPath = data.points.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${xForHour(p.hour).toFixed(1)} ${yForDim(p.dimPct).toFixed(1)}`
+  ).join(' ') + ` L ${xForHour(24).toFixed(1)} ${baseY} L ${xForHour(0).toFixed(1)} ${baseY} Z`;
+  const idx = Math.min(data.points.length - 1, Math.max(0, Math.round(data.nowHour * 4)));
+  const nowPoint = data.points[idx];
+  const nowX = xForHour(data.nowHour);
+  const ticks = [0, 6, 12, 18, 24].map(h => {
+    const x = xForHour(h);
+    return `<text x="${x}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#888">${h}</text>`;
+  }).join('');
+  const sunMark = (h, fill) => h == null ? '' :
+    `<line x1="${xForHour(h).toFixed(1)}" y1="${baseY}" x2="${xForHour(h).toFixed(1)}" y2="${baseY + 6}" stroke="${fill}" stroke-width="2"/>`;
+  return `
+    <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;">
+      <path d="${dimPath}" fill="#cbd5e1" opacity="0.45"/>
+      <path d="${kelvinPath}" fill="#f59e0b" opacity="0.75"/>
+      <line x1="${padL}" y1="${baseY}" x2="${W - padR}" y2="${baseY}" stroke="#999" stroke-width="0.5"/>
+      ${ticks}
+      ${sunMark(data.sunriseHour, '#f59e0b')}
+      ${sunMark(data.sunsetHour, '#475569')}
+      <line x1="${nowX.toFixed(1)}" y1="${padT}" x2="${nowX.toFixed(1)}" y2="${baseY}" stroke="#111" stroke-width="1"/>
+      <circle cx="${nowX.toFixed(1)}" cy="${yForKelvin(nowPoint.kelvin).toFixed(1)}" r="3" fill="#111"/>
+      <text x="${nowX.toFixed(1)}" y="${padT - 2}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${nowPoint.kelvin}K / ${nowPoint.dimPct}%</text>
+    </svg>`;
+}
+
+// --- bootstrap ---
+function bootstrap() {
+  Homey.emit('list_fields', null, (err, fields) => {
+    if (err) { showStatus('Felder laden fehlgeschlagen: ' + err, 'error'); return; }
+    FIELDS = fields || [];
+    Homey.emit('list_groups', null, (e, gs) => {
+      groups = (typeof gs === 'object' && gs) ? gs : {};
+      Homey.emit('get_initial', null, (e2, cfg) => {
+        if (!e2 && cfg) {
+          isRepair = true;
+          document.getElementById('name').value = cfg.name || '';
+          initialOverrides = cfg.overrides || {};
+          renderGroupOptions(cfg.groupId || '');
+          document.getElementById('submit').textContent = 'Änderungen speichern';
+        } else {
+          // Pair flow: default to the first available group so the user
+          // doesn't have to pick one manually for the common case.
+          const firstGroupId = Object.keys(groups)[0] || '';
+          renderGroupOptions(firstGroupId);
+        }
+        renderFields();
+
+        // Probe + initial draft so the pair flow definitely receives state.
+        Homey.emit('save_draft', { probe: true, name: 'PROBE' }, () => {});
+
+        document.getElementById('groupId').addEventListener('change', () => {
+          updateGroupPlaceholders();
+          pushDraftDebounced();
+          refreshCurveDebounced();
+        });
+        document.querySelectorAll('input[type=text], input[type=number]').forEach(el => {
+          el.addEventListener('input', pushDraftDebounced);
+        });
+
+        // Initial curve render
+        refreshCurve();
+
+        document.getElementById('submit').addEventListener('click', () => {
+          showStatus('Sende…');
+          if (isRepair) {
+            Homey.emit('save_changes', collectPayload(), (err) => {
+              if (err) { showStatus('Speichern fehlgeschlagen: ' + err, 'error'); return; }
+              showStatus('Gespeichert.', 'ok');
+              setTimeout(() => Homey.done(), 400);
+            });
+          } else {
+            pushDraft();
+            setTimeout(() => {
+              showStatus('Ok, weiter…');
+              Homey.nextView();
+            }, 300);
+          }
+        });
+      });
+    });
+  });
+}
+
+if (typeof Homey !== 'undefined') bootstrap();
+else document.addEventListener('DOMContentLoaded', bootstrap);
+</script>
+</body>
+</html>
