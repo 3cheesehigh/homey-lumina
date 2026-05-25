@@ -2,5 +2,8 @@
   "0.1.0": {
     "en": "Initial release. Adaptive day/night curve anchored on solar elevation, per-zone overrides, optional night color, Smart-turn-on flow card.",
     "de": "Erste Version. Adaptive Tag-/Nacht-Kurve basierend auf Sonnenstand, Zone-spezifische Overrides, optionale Nachtfarbe, Smart-Einschalten-Flow-Karte."
+  },
+  "0.1.1": {
+    "en": "Initial public release."
   }
 }

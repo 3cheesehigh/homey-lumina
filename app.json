@@ -1,9 +1,11 @@
 {
   "id": "de.cqnc.lumina",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "compatibility": ">=5.0.0",
   "sdk": 3,
-  "platforms": ["local"],
+  "platforms": [
+    "local"
+  ],
   "name": {
     "en": "Lumina",
     "de": "Lumina"
@@ -12,24 +14,47 @@
     "en": "Cross-app sun-based color temperature and brightness control for lights paired through other Homey apps.",
     "de": "App-übergreifende Steuerung von Farbtemperatur und Helligkeit anhand des Sonnenstands für Lampen aus anderen Homey-Apps."
   },
-  "category": ["tools"],
+  "category": [
+    "tools"
+  ],
   "permissions": [
     "homey:manager:api",
     "homey:manager:geolocation"
   ],
   "api": {
-    "getLog":        { "method": "GET",  "path": "/log" },
-    "getFields":     { "method": "GET",  "path": "/fields" },
-    "getZones":      { "method": "GET",  "path": "/zones" },
-    "postAssignZone":{ "method": "POST", "path": "/zones/assign" },
-    "postZoneUpdate":{ "method": "POST", "path": "/zones/update" },
-    "postCurve":     { "method": "POST", "path": "/curve" }
+    "getLog": {
+      "method": "GET",
+      "path": "/log"
+    },
+    "getFields": {
+      "method": "GET",
+      "path": "/fields"
+    },
+    "getZones": {
+      "method": "GET",
+      "path": "/zones"
+    },
+    "postAssignZone": {
+      "method": "POST",
+      "path": "/zones/assign"
+    },
+    "postZoneUpdate": {
+      "method": "POST",
+      "path": "/zones/update"
+    },
+    "postCurve": {
+      "method": "POST",
+      "path": "/curve"
+    }
   },
   "flow": {
     "actions": [
       {
         "id": "set_mode",
-        "title": { "en": "Set mode", "de": "Modus setzen" },
+        "title": {
+          "en": "Set mode",
+          "de": "Modus setzen"
+        },
         "titleFormatted": {
           "en": "Set mode to [[mode]]",
           "de": "Modus auf [[mode]] setzen"
@@ -39,23 +64,50 @@
             "name": "device",
             "type": "device",
             "filter": "driver_id=zone",
-            "title": { "en": "Zone", "de": "Zone" }
+            "title": {
+              "en": "Zone",
+              "de": "Zone"
+            }
           },
           {
             "name": "mode",
             "type": "dropdown",
-            "title": { "en": "Mode", "de": "Modus" },
+            "title": {
+              "en": "Mode",
+              "de": "Modus"
+            },
             "values": [
-              { "id": "off",   "label": { "en": "Off",      "de": "Aus" } },
-              { "id": "day",   "label": { "en": "Adaptive", "de": "Adaptiv" } },
-              { "id": "night", "label": { "en": "Night",    "de": "Nacht" } }
+              {
+                "id": "off",
+                "label": {
+                  "en": "Off",
+                  "de": "Aus"
+                }
+              },
+              {
+                "id": "day",
+                "label": {
+                  "en": "Adaptive",
+                  "de": "Adaptiv"
+                }
+              },
+              {
+                "id": "night",
+                "label": {
+                  "en": "Night",
+                  "de": "Nacht"
+                }
+              }
             ]
           }
         ]
       },
       {
         "id": "smart_on",
-        "title": { "en": "Smart turn on", "de": "Smart einschalten" },
+        "title": {
+          "en": "Smart turn on",
+          "de": "Smart einschalten"
+        },
         "titleFormatted": {
           "en": "Smart turn on [[target]]",
           "de": "[[target]] smart einschalten"
@@ -68,8 +120,14 @@
           {
             "name": "target",
             "type": "autocomplete",
-            "title": { "en": "Light", "de": "Lampe" },
-            "placeholder": { "en": "Pick a light…", "de": "Lampe wählen…" }
+            "title": {
+              "en": "Light",
+              "de": "Lampe"
+            },
+            "placeholder": {
+              "en": "Pick a light…",
+              "de": "Lampe wählen…"
+            }
           }
         ]
       }
@@ -77,7 +135,10 @@
     "conditions": [
       {
         "id": "mode_is",
-        "title": { "en": "Mode is ...", "de": "Modus ist ..." },
+        "title": {
+          "en": "Mode is ...",
+          "de": "Modus ist ..."
+        },
         "titleFormatted": {
           "en": "Mode !{{is|is not}} [[mode]]",
           "de": "Modus !{{ist|ist nicht}} [[mode]]"
@@ -87,16 +148,40 @@
             "name": "device",
             "type": "device",
             "filter": "driver_id=zone",
-            "title": { "en": "Zone", "de": "Zone" }
+            "title": {
+              "en": "Zone",
+              "de": "Zone"
+            }
           },
           {
             "name": "mode",
             "type": "dropdown",
-            "title": { "en": "Mode", "de": "Modus" },
+            "title": {
+              "en": "Mode",
+              "de": "Modus"
+            },
             "values": [
-              { "id": "off",   "label": { "en": "Off",      "de": "Aus" } },
-              { "id": "day",   "label": { "en": "Adaptive", "de": "Adaptiv" } },
-              { "id": "night", "label": { "en": "Night",    "de": "Nacht" } }
+              {
+                "id": "off",
+                "label": {
+                  "en": "Off",
+                  "de": "Aus"
+                }
+              },
+              {
+                "id": "day",
+                "label": {
+                  "en": "Adaptive",
+                  "de": "Adaptiv"
+                }
+              },
+              {
+                "id": "night",
+                "label": {
+                  "en": "Night",
+                  "de": "Nacht"
+                }
+              }
             ]
           }
         ]
@@ -120,8 +205,14 @@
   "capabilities": {
     "adaptive_kelvin": {
       "type": "number",
-      "title": { "en": "Color temperature", "de": "Farbtemperatur" },
-      "units": { "en": "K", "de": "K" },
+      "title": {
+        "en": "Color temperature",
+        "de": "Farbtemperatur"
+      },
+      "units": {
+        "en": "K",
+        "de": "K"
+      },
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
@@ -129,8 +220,14 @@
     },
     "adaptive_dim": {
       "type": "number",
-      "title": { "en": "Brightness", "de": "Helligkeit" },
-      "units": { "en": "%", "de": "%" },
+      "title": {
+        "en": "Brightness",
+        "de": "Helligkeit"
+      },
+      "units": {
+        "en": "%",
+        "de": "%"
+      },
       "min": 0,
       "max": 100,
       "getable": true,
@@ -140,8 +237,14 @@
     },
     "measure_sun_elevation": {
       "type": "number",
-      "title": { "en": "Sun elevation", "de": "Sonnenstand" },
-      "units": { "en": "°", "de": "°" },
+      "title": {
+        "en": "Sun elevation",
+        "de": "Sonnenstand"
+      },
+      "units": {
+        "en": "°",
+        "de": "°"
+      },
       "getable": true,
       "setable": false,
       "uiComponent": "sensor",
@@ -150,14 +253,35 @@
     },
     "adaptive_mode": {
       "type": "enum",
-      "title": { "en": "Mode", "de": "Modus" },
+      "title": {
+        "en": "Mode",
+        "de": "Modus"
+      },
       "getable": true,
       "setable": true,
       "uiComponent": "picker",
       "values": [
-        { "id": "off",   "title": { "en": "Off",      "de": "Aus" } },
-        { "id": "day",   "title": { "en": "Adaptive", "de": "Adaptiv" } },
-        { "id": "night", "title": { "en": "Night",    "de": "Nacht" } }
+        {
+          "id": "off",
+          "title": {
+            "en": "Off",
+            "de": "Aus"
+          }
+        },
+        {
+          "id": "day",
+          "title": {
+            "en": "Adaptive",
+            "de": "Adaptiv"
+          }
+        },
+        {
+          "id": "night",
+          "title": {
+            "en": "Night",
+            "de": "Nacht"
+          }
+        }
       ]
     }
   },
@@ -175,16 +299,34 @@
         "adaptive_dim",
         "measure_sun_elevation"
       ],
-      "platforms": ["local"],
-      "connectivity": ["lan"],
+      "platforms": [
+        "local"
+      ],
+      "connectivity": [
+        "lan"
+      ],
       "images": {
         "small": "/drivers/zone/assets/images/small.png",
         "large": "/drivers/zone/assets/images/large.png"
       },
       "pair": [
-        { "id": "setup",         "navigation": { "next": "list_devices" } },
-        { "id": "list_devices",  "template": "list_devices", "navigation": { "next": "add_devices" } },
-        { "id": "add_devices",   "template": "add_devices" }
+        {
+          "id": "setup",
+          "navigation": {
+            "next": "list_devices"
+          }
+        },
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
       ],
       "settings": []
     }
