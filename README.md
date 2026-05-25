@@ -30,15 +30,6 @@ not for the common case.
   titles, store description) uses Homey's standard `{ en, de }` blocks
   in `app.json`.
 
-## Development
-
-```sh
-npm install
-npx homey app run         # foreground, with live log
-npx homey app install     # build + push to your Homey
-npx homey app validate --level publish
-```
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
