@@ -9,10 +9,10 @@
     "de": "Lumina"
   },
   "description": {
-    "en": "Lights that follow the sun. Adaptive color temperature and brightness, smoothly, throughout the day.",
-    "de": "Beleuchtung, die der Sonne folgt. Adaptive Farbtemperatur und Helligkeit, smooth über den ganzen Tag."
+    "en": "Cross-app sun-based color temperature and brightness control for lights paired through other Homey apps.",
+    "de": "App-übergreifende Steuerung von Farbtemperatur und Helligkeit anhand des Sonnenstands für Lampen aus anderen Homey-Apps."
   },
-  "category": ["lights"],
+  "category": ["tools"],
   "permissions": [
     "homey:manager:api",
     "homey:manager:geolocation"
