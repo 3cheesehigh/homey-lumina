@@ -1,7 +1,7 @@
 'use strict';
 
 const Homey = require('homey');
-const { FIELDS, KEYS, defaults: fieldDefaults } = require('../../lib/fields');
+const { FIELDS, KEYS } = require('../../lib/fields');
 const { computeAdaptive, kelvinToLightTemperature, buildDailyCurve } = require('../../lib/curve');
 
 function pickValues(payload) {

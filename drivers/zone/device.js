@@ -2,7 +2,7 @@
 
 const Homey = require('homey');
 const { computeAdaptive, kelvinToLightTemperature } = require('../../lib/curve');
-const { FIELDS, KEYS, defaults } = require('../../lib/fields');
+const { KEYS, defaults } = require('../../lib/fields');
 
 const ZONE_DRIVER_ID = 'homey:app:de.cqnc.lumina:zone';
 const GROUP_DRIVER_ID = 'homey:virtualdrivergroup:driver';

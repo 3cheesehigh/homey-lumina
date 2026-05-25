@@ -10,57 +10,37 @@ Zone per room, done. Sane defaults, one screen for everything, a visual
 overrides and group profiles exist for when you actually need them — but
 not for the common case.
 
-## What it does
-
-You group your lights into **Lumina Zones** (one per Homey-Bereich). Each
-zone inherits day/night curve values from a shared **Group** profile and
-can override individual values per zone if a specific room wants
-different behaviour. Every five minutes the app recomputes the target
-from the current solar elevation and writes it to every member lamp that
-is currently on.
-
-Three modes per zone:
-- **Adaptive** — follows the sun
-- **Night** — fixed warm dim state (or an optional color like deep red,
-  on lamps that support `light_hue` + `light_saturation`)
-- **Off** — Lumina stops touching the lamps
-
-Lamps without color-temperature capability are still dimmed adaptively;
-lamps without color capability fall back to color temperature when night
-color is enabled.
-
-## Flow cards
-
-- **Action: Set mode** — switch a zone between Off / Adaptive / Night.
-- **Condition: Mode is …** — check a zone's current mode.
-- **Action: Smart turn on** — turn a light on at the current adaptive
-  values, so it wakes at the right brightness/color instead of flashing
-  its last hardware-stored state.
-
-## Settings
-
-Open the app's Configure screen to:
-- Edit the Day/Night curve parameters per Group.
-- Assign zones to a Group, or override specific values per zone.
-- Enable an optional fixed color for night mode.
-- Preview the 24h kelvin + brightness curve before saving.
+**User-facing description and pairing flow:** see [README.txt](README.txt).
 
 ## Architecture notes
 
-- **Live binding**: groups define the values; zones override per key.
+- **Live binding** — groups define the values; zones override per key.
   Changing a group cascades to every zone that doesn't have an explicit
   override for that key.
-- **Member resolution**: a Lumina Zone owns every dim-capable light in
-  its Homey-Bereich and child Bereiche, *unless* a child has its own
-  Lumina Zone (which then takes over). Homey "Group" devices are
-  preferred over individual lamps where possible.
-- **Manual override detection**: if a user dims a lamp via Hue/wall
+- **Member resolution** — a Lumina Zone owns every dim-capable light in
+  its Homey zone and child zones, *unless* a child has its own Lumina
+  Zone (which then takes over). Homey "Group" devices are preferred over
+  individual lamps where possible (one Bridge command per group instead
+  of N).
+- **Manual override detection** — if a user dims a lamp via Hue/wall
   switch, Lumina pauses adaptive control on that lamp until it goes
   off/on again. Configurable.
+- **i18n** — settings + pair UI ship inline EN/DE string packs, picked
+  via `navigator.language`. App metadata (capability titles, flow card
+  titles, store description) uses Homey's standard `{ en, de }` blocks
+  in `app.json`.
+
+## Development
+
+```sh
+npm install
+npx homey app run         # foreground, with live log
+npx homey app install     # build + push to your Homey
+npx homey app validate --level publish
+```
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
-Source: https://github.com/3cheesehigh/homey-lumina
 Support: hello@3cheesehigh.com

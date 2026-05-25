@@ -20,7 +20,7 @@ see what changes before you save them.
 
 How it works
 ------------
-You group your lights into "Lumina Zones" (one per Homey-Bereich). Each
+You group your lights into "Lumina Zones" (one per Homey zone). Each
 zone inherits day/night curve values from a shared Group profile, and you
 can override individual values per zone if a room needs different
 behaviour. Every five minutes the app recomputes the target values from
@@ -46,11 +46,11 @@ Flow cards
 
 Pairing
 -------
-After installing, add a "Lumina Zone" device per Homey-Bereich you want
+After installing, add a "Lumina Zone" device per Homey zone you want
 the app to manage. The zone automatically picks up every dim-capable
-light in its Homey-Bereich (and recursively in child Bereiche, unless
-those have their own Lumina-Zone). If a Homey "Group" device sits in the
-same Bereich, Lumina prefers writing to the group (one bridge command for
+light in its Homey zone (and recursively in child zones, unless
+those have their own Lumina Zone). If a Homey "Group" device sits in the
+same zone, Lumina prefers writing to the group (one bridge command for
 all members) instead of to each lamp individually.
 
 Settings
