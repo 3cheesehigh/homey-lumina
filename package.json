@@ -1,6 +1,6 @@
 {
-  "name": "de.cqnc.lumina",
-  "version": "0.1.0",
+  "name": "com.3cheesehigh.lumina",
+  "version": "0.1.1",
   "main": "app.js",
   "dependencies": {
     "homey-api": "^3.17.3",

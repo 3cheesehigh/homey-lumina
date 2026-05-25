@@ -80,7 +80,7 @@ class ZoneDriver extends Homey.Driver {
         const q = (query || '').toLowerCase();
         const items = [];
         for (const d of Object.values(all)) {
-          if (d.driverId === 'homey:app:de.cqnc.lumina:zone') continue;
+          if (d.driverId === 'homey:app:com.3cheesehigh.lumina:zone') continue;
           const caps = d.capabilities || [];
           if (!caps.includes('onoff')) continue;
           if (!caps.includes('dim') && !caps.includes('light_temperature')) continue;
