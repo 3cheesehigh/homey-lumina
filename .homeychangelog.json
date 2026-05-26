@@ -11,5 +11,8 @@
   },
   "0.1.3": {
     "en": "Add Smart toggle and Cycle mode flow cards. Default new zones to \"Lumina Zone\" if no name is entered. Fix icon visibility in device picker."
+  },
+  "0.2.1": {
+    "en": "Reworked to config-only. Bereiche are configured directly from the app settings now (group, mode, overrides, exclusions). No more virtual devices to pair. Flow cards autocomplete by zone name."
   }
 }
