@@ -3,6 +3,8 @@
 const Homey = require('homey');
 const { HomeyAPI } = require('homey-api');
 const { defaults } = require('./lib/fields');
+const { ZonesController } = require('./lib/zones');
+const { kelvinToLightTemperature, computeAdaptive } = require('./lib/curve');
 
 const DEVICE_CACHE_TTL_MS = 30_000;
 
@@ -13,7 +15,7 @@ class LuminaApp extends Homey.App {
     this._ring = [];
     this._push('app.onInit');
 
-    // Seed a default group on first install so a freshly-paired zone has
+    // Seed a default group on first install so a freshly-added zone has
     // something sane to inherit from without the user having to set one up.
     const groups = this.homey.settings.get('groups') || {};
     if (Object.keys(groups).length === 0) {
@@ -23,10 +25,21 @@ class LuminaApp extends Homey.App {
     }
 
     // Shared HomeyAPI instance + 30 s cache for devices/zones. Without this
-    // every Zone device's tick would hit getDevices() (160+ devices) several
+    // every runtime's tick would hit getDevices() (160+ devices) several
     // times every 5 minutes; with N zones that's NxM redundant calls.
     this._cacheUntil = 0;
     this._cachePending = null;
+
+    this._zones = new ZonesController(this);
+    await this._zones.start();
+
+    await this._registerFlowCards();
+  }
+
+  async onUninit() {
+    if (this._zones) {
+      await this._zones.stop().catch(() => {});
+    }
   }
 
   _push(line) {
@@ -42,6 +55,10 @@ class LuminaApp extends Homey.App {
 
   getRecentLog() {
     return this._ring.slice();
+  }
+
+  getZones() {
+    return this._zones;
   }
 
   async getApi() {
@@ -79,6 +96,183 @@ class LuminaApp extends Homey.App {
 
   invalidateDevicesCache() {
     this._cacheUntil = 0;
+  }
+
+  // ----- flow cards (registered once at app level) -----
+
+  async _registerFlowCards() {
+    // Autocomplete listener shared by all zone-targeting cards. Returns the
+    // configured Bereiche by their Homey-zone name so users can search by
+    // the name they already know.
+    const zoneAutocomplete = async (query) => {
+      const q = (query || '').toLowerCase();
+      const { zones: allZones } = await this.getDevicesAndZones();
+      const items = [];
+      for (const rt of this._zones.listRuntimes()) {
+        const name = rt._homeyZoneName || allZones[rt.bereichId]?.name || rt.bereichId;
+        if (q && !name.toLowerCase().includes(q)) continue;
+        items.push({ id: rt.bereichId, name });
+      }
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      return items.slice(0, 50);
+    };
+
+    const resolveZone = (sel) => {
+      if (!sel || !sel.id) throw new Error('no zone chosen');
+      const rt = this._zones.getRuntime(sel.id);
+      if (!rt) throw new Error(`zone ${sel.id} not configured`);
+      return rt;
+    };
+
+    this._tryRegister('set_mode', (card) => {
+      card.registerArgumentAutocompleteListener('zone', zoneAutocomplete);
+      card.registerRunListener(async (args) => {
+        const rt = resolveZone(args.zone);
+        this.trace(`flow: set_mode -> ${rt.getName()} = ${args.mode}`);
+        await rt.setMode(args.mode);
+      });
+    });
+
+    this._tryRegister('mode_is', (card) => {
+      card.registerArgumentAutocompleteListener('zone', zoneAutocomplete);
+      card.registerRunListener(async (args) => {
+        const rt = resolveZone(args.zone);
+        return rt.getMode() === args.mode;
+      });
+    }, 'condition');
+
+    this._tryRegister('cycle_mode', (card) => {
+      card.registerArgumentAutocompleteListener('zone', zoneAutocomplete);
+      card.registerRunListener(async (args) => {
+        const rt = resolveZone(args.zone);
+        const selected = Array.isArray(args.modes) ? args.modes : [];
+        const sequence = ['off', 'day', 'night'].filter((m) => selected.includes(m));
+        if (sequence.length === 0) throw new Error('select at least one mode to cycle through');
+        const current = rt.getMode();
+        const curIdx = sequence.indexOf(current);
+        const nextIdx = curIdx >= 0 ? (curIdx + 1) % sequence.length : 0;
+        const next = sequence[nextIdx];
+        this.trace(`flow: cycle_mode -> ${rt.getName()} ${current} -> ${next} (cycle: ${sequence.join('->')})`);
+        await rt.setMode(next);
+      });
+    });
+
+    // ----- smart-on / smart-toggle: target is a lamp, find its zone -----
+
+    const lightAutocomplete = async (query) => {
+      const { devices: all, zones } = await this.getDevicesAndZones();
+      const q = (query || '').toLowerCase();
+      const items = [];
+      for (const d of Object.values(all)) {
+        const caps = d.capabilities || [];
+        if (!caps.includes('onoff')) continue;
+        if (!caps.includes('dim') && !caps.includes('light_temperature')) continue;
+        const name = d.name || '';
+        const zoneName = zones[d.zone]?.name || '';
+        const hay = `${name} ${zoneName}`.toLowerCase();
+        if (q && !hay.includes(q)) continue;
+        items.push({
+          id: d.id,
+          name: zoneName ? `${name} (${zoneName})` : name,
+          description: zoneName,
+        });
+      }
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      return items.slice(0, 50);
+    };
+
+    const resolveLightTarget = async (sel) => {
+      if (!sel || !sel.id) throw new Error('no target chosen');
+      const { devices } = await this.getDevicesAndZones();
+      const target = devices[sel.id];
+      if (!target) throw new Error(`target ${sel.id} not found`);
+      return target;
+    };
+
+    const performSmartOn = async (target) => {
+      const rt = this._zones.findRuntimeForLight(target.id);
+      const v = rt ? rt.getCurrentValues() : this._defaultValues();
+      if (!v) throw new Error('no adaptive values available (no default group?)');
+
+      this.trace(`smart-on writes -> ${target.name} via zone=${rt?.getName() ?? 'default'} -> ${v.kelvin}K / ${v.dimPct}%`);
+
+      const api = await this.getApi();
+      const caps = target.capabilities || [];
+      const writes = [];
+      if (caps.includes('dim')) {
+        writes.push(api.devices.setCapabilityValue({
+          deviceId: target.id, capabilityId: 'dim', value: v.dimPct / 100,
+        }));
+      }
+      if (caps.includes('light_temperature')) {
+        writes.push(api.devices.setCapabilityValue({
+          deviceId: target.id, capabilityId: 'light_temperature',
+          value: kelvinToLightTemperature(v.kelvin),
+        }));
+      }
+      await Promise.all(writes);
+    };
+
+    this._tryRegister('smart_on', (card) => {
+      card.registerArgumentAutocompleteListener('target', lightAutocomplete);
+      card.registerRunListener(async (args) => {
+        const target = await resolveLightTarget(args.target);
+        this.trace(`flow: smart_on -> ${target.name}`);
+        await performSmartOn(target);
+      });
+    });
+
+    this._tryRegister('smart_toggle', (card) => {
+      card.registerArgumentAutocompleteListener('target', lightAutocomplete);
+      card.registerRunListener(async (args) => {
+        const target = await resolveLightTarget(args.target);
+        const api = await this.getApi();
+        const isOn = await api.devices.getCapabilityValue({
+          deviceId: target.id, capabilityId: 'onoff',
+        });
+        if (isOn === true) {
+          this.trace(`flow: smart_toggle -> ${target.name} on, turning off`);
+          await api.devices.setCapabilityValue({
+            deviceId: target.id, capabilityId: 'onoff', value: false,
+          });
+        } else {
+          this.trace(`flow: smart_toggle -> ${target.name} off, smart-on`);
+          await performSmartOn(target);
+        }
+      });
+    });
+  }
+
+  _tryRegister(cardId, setup, kind = 'action') {
+    try {
+      const card = kind === 'condition'
+        ? this.homey.flow.getConditionCard(cardId)
+        : this.homey.flow.getActionCard(cardId);
+      setup(card);
+      this.trace(`flow card registered: ${cardId} (${kind})`);
+    } catch (err) {
+      this.trace(`flow card registration failed: ${cardId} -- ${err.message}`);
+    }
+  }
+
+  // Fallback adaptive values for smart-on when the target light is not a
+  // member of any configured zone -- uses the default group + Homey
+  // geolocation.
+  _defaultValues() {
+    const groups = this.homey.settings.get('groups') || {};
+    const g = groups.default;
+    if (!g) return null;
+    let lat, lon;
+    try {
+      lat = this.homey.geolocation.getLatitude();
+      lon = this.homey.geolocation.getLongitude();
+    } catch (_) {}
+    return computeAdaptive({
+      lat, lon, now: new Date(),
+      day: { kelvinMin: g.dayKelvinMin, kelvinMax: g.dayKelvinMax, dimMin: g.dayDimMin, dimMax: g.dayDimMax },
+      night: { kelvin: g.nightKelvin, dim: g.nightDim },
+      nightMode: false,
+    });
   }
 }
 

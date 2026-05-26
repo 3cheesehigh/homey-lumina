@@ -16,8 +16,16 @@ function clampNumber(key, val) {
   return Math.max(f.min, Math.min(f.max, x));
 }
 
-function getZoneDevices(homey) {
-  return homey.drivers.getDriver('zone').getDevices();
+function serializeRuntime(rt, allZones) {
+  return {
+    bereichId: rt.bereichId,
+    homeyZoneName: rt._homeyZoneName || allZones[rt.bereichId]?.name || rt.bereichId,
+    groupId: rt._config().groupId || 'default',
+    overrides: rt._config().overrides || {},
+    excludedLights: rt._config().excludedLights || [],
+    mode: rt.getMode(),
+    members: rt.getMemberCandidates(),
+  };
 }
 
 module.exports = {
@@ -29,60 +37,62 @@ module.exports = {
     return FIELDS;
   },
 
-  // List Lumina Zone devices for the settings UI -- includes override values
-  // so the inline editor can pre-fill its fields without an extra round trip.
+  // List all configured Lumina zones with their full state, so the settings
+  // UI can render groups, overrides, member checkboxes and current mode
+  // without further round trips.
   async getZones({ homey }) {
-    const devices = getZoneDevices(homey);
-    return devices.map(d => ({
-      id: d.getData().id,
-      name: d.getName(),
-      groupId: d.getStoreValue('groupId') || 'default',
-      overrides: d.getStoreValue('overrides') || {},
-    }));
+    const controller = homey.app.getZones();
+    const { zones: allZones } = await homey.app.getDevicesAndZones();
+    return controller.listRuntimes().map(rt => serializeRuntime(rt, allZones));
   },
 
-  // Update a zone's name and/or overrides from the settings UI.
-  async postZoneUpdate({ homey, body }) {
-    const { zoneId, name, overrides } = body || {};
-    if (!zoneId) throw new Error('zoneId required');
-    const devices = getZoneDevices(homey);
-    const dev = devices.find(d => d.getData().id === zoneId);
-    if (!dev) throw new Error(`zone ${zoneId} not found`);
+  // List Homey-Bereiche that don't yet have a Lumina zone configured -- used
+  // to populate the "+ Bereich hinzufügen" dropdown.
+  async getAvailableZones({ homey }) {
+    const controller = homey.app.getZones();
+    const { zones: allZones } = await homey.app.getDevicesAndZones();
+    const configured = new Set(controller.listRuntimes().map(rt => rt.bereichId));
+    const out = [];
+    for (const z of Object.values(allZones)) {
+      if (configured.has(z.id)) continue;
+      out.push({ id: z.id, name: z.name, parent: z.parent || null });
+    }
+    out.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return out;
+  },
 
-    if (name && name !== dev.getName()) {
-      await dev.setName(name.toString().trim() || 'Lumina-Zone');
-    }
-    if (overrides && typeof overrides === 'object') {
-      // Filter overrides: only keep keys that differ from the group's value
-      // (keys equal to group = inherit, not an override).
-      const groupId = dev.getStoreValue('groupId') || 'default';
+  // Upsert: create or update a zone's config (group, overrides, excludedLights,
+  // mode). The settings UI uses this for both "+ Bereich" and "edit existing".
+  async postZoneUpsert({ homey, body }) {
+    const { bereichId } = body || {};
+    if (!bereichId) throw new Error('bereichId required');
+
+    const { zones: allZones } = await homey.app.getDevicesAndZones();
+    if (!allZones[bereichId]) throw new Error(`Bereich ${bereichId} unknown`);
+
+    const controller = homey.app.getZones();
+    const patch = {};
+    if (body.groupId != null) {
       const groups = homey.settings.get('groups') || {};
-      const group = groups[groupId] || {};
-      const clean = {};
-      for (const [k, v] of Object.entries(overrides)) {
-        if (k === 'nightColor') {
-          // Optional hex string. Drop if invalid or equal to the group's
-          // value (== inherit, not an override).
-          if (typeof v !== 'string' || !/^#[0-9a-f]{6}$/i.test(v)) continue;
-          const norm = v.toLowerCase();
-          if ((group.nightColor || '').toLowerCase() === norm) continue;
-          clean[k] = norm;
-          continue;
-        }
-        const n = Number(v);
-        if (!Number.isFinite(n)) continue;
-        if (group[k] != null && n === group[k]) continue;
-        clean[k] = n;
-      }
-      await dev.setStoreValue('overrides', clean);
+      if (!groups[body.groupId]) throw new Error(`group ${body.groupId} not found`);
+      patch.groupId = body.groupId;
     }
-    homey.app.trace(`api: updated zone "${dev.getName()}" -> trigger apply`);
-    // Fire-and-forget apply so the new values reach the lamps immediately
-    // instead of waiting up to the next 5-minute tick.
-    if (typeof dev._applyNow === 'function') {
-      dev._applyNow().catch(err => homey.app.trace(`apply after zone update failed: ${err.message}`));
-    }
+    if (body.overrides != null) patch.overrides = body.overrides;
+    if (body.excludedLights != null) patch.excludedLights = body.excludedLights;
+    if (body.mode != null) patch.mode = body.mode;
+
+    const next = await controller.upsertZone(bereichId, patch);
+    homey.app.trace(`api: upserted zone "${allZones[bereichId].name}" -> ${JSON.stringify({ groupId: next.groupId, mode: next.mode })}`);
     return { ok: true };
+  },
+
+  async postZoneRemove({ homey, body }) {
+    const { bereichId } = body || {};
+    if (!bereichId) throw new Error('bereichId required');
+    const controller = homey.app.getZones();
+    const removed = await controller.removeZone(bereichId);
+    homey.app.trace(`api: removed zone ${bereichId} (${removed ? 'ok' : 'not configured'})`);
+    return { ok: removed };
   },
 
   // Compute the 24-hour adaptive curve (kelvin + dim per quarter-hour) for a
@@ -91,8 +101,6 @@ module.exports = {
     const day = body?.day;
     const night = body?.night;
     if (!day || !night) throw new Error('day and night required');
-    // Clamp inputs to the declared FIELDS ranges so a stray NaN from the
-    // settings UI can't produce broken SVG coordinates downstream.
     const cleanDay = {
       kelvinMin: clampNumber('dayKelvinMin', day.kelvinMin),
       kelvinMax: clampNumber('dayKelvinMax', day.kelvinMax),
@@ -105,30 +113,5 @@ module.exports = {
       color: typeof night.color === 'string' ? night.color : undefined,
     };
     return buildDailyCurve({ homey, day: cleanDay, night: cleanNight });
-  },
-
-  // Assign a zone to a different group. Updates the zone's store.groupId
-  // only -- in live-binding mode the values come from the group at apply
-  // time, so no seeding is needed. Any per-key overrides the user set on the
-  // zone stay intact across group changes (they remain the user's explicit
-  // choice for those keys).
-  async postAssignZone({ homey, body }) {
-    const { zoneId, groupId } = body || {};
-    if (!zoneId || !groupId) throw new Error('zoneId and groupId required');
-
-    const devices = getZoneDevices(homey);
-    const dev = devices.find(d => d.getData().id === zoneId);
-    if (!dev) throw new Error(`zone ${zoneId} not found`);
-
-    const groups = homey.settings.get('groups') || {};
-    const group = groups[groupId];
-    if (!group) throw new Error(`group ${groupId} not found`);
-
-    await dev.setStoreValue('groupId', groupId);
-    homey.app.trace(`api: assigned zone "${dev.getName()}" -> group "${group.name}" -> trigger apply`);
-    if (typeof dev._applyNow === 'function') {
-      dev._applyNow().catch(err => homey.app.trace(`apply after group change failed: ${err.message}`));
-    }
-    return { ok: true };
   },
 };
