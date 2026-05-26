@@ -1,7 +1,7 @@
 {
   "id": "com.3cheesehigh.lumina",
   "version": "0.1.2",
-  "compatibility": ">=5.0.0",
+  "compatibility": ">=12.5.0",
   "sdk": 3,
   "platforms": [
     "local"
@@ -128,6 +128,93 @@
               "en": "Pick a light…",
               "de": "Lampe wählen…"
             }
+          }
+        ]
+      },
+      {
+        "id": "smart_toggle",
+        "title": {
+          "en": "Smart toggle",
+          "de": "Smart umschalten"
+        },
+        "titleFormatted": {
+          "en": "Smart toggle [[target]]",
+          "de": "[[target]] smart umschalten"
+        },
+        "hint": {
+          "en": "If the light is off, turns it on with the current adaptive brightness and color temperature. If it's already on, turns it off. Lets a single wall-switch press do the right thing without a Flow condition.",
+          "de": "Ist die Lampe aus, wird sie mit aktuellem Adaptive-Wert eingeschaltet. Ist sie an, wird sie ausgeschaltet. So macht ein Wandschalter das Richtige ohne Flow-Bedingung."
+        },
+        "args": [
+          {
+            "name": "target",
+            "type": "autocomplete",
+            "title": {
+              "en": "Light",
+              "de": "Lampe"
+            },
+            "placeholder": {
+              "en": "Pick a light…",
+              "de": "Lampe wählen…"
+            }
+          }
+        ]
+      },
+      {
+        "id": "cycle_mode",
+        "title": {
+          "en": "Cycle mode",
+          "de": "Modus durchwechseln"
+        },
+        "titleFormatted": {
+          "en": "Cycle through [[modes]]",
+          "de": "Durchwechseln durch [[modes]]"
+        },
+        "hint": {
+          "en": "Cycles the zone through the selected modes in the order Off → Adaptive → Night, skipping unselected ones. Lets one button press step through e.g. Adaptive ↔ Night.",
+          "de": "Wechselt die Zone in der Reihenfolge Aus → Adaptiv → Nacht durch die ausgewählten Modi und überspringt die übrigen. So macht ein Tastendruck z.B. Adaptiv ↔ Nacht."
+        },
+        "args": [
+          {
+            "name": "device",
+            "type": "device",
+            "filter": "driver_id=zone",
+            "title": {
+              "en": "Zone",
+              "de": "Zone"
+            }
+          },
+          {
+            "name": "modes",
+            "type": "multiselect",
+            "conjunction": "or",
+            "title": {
+              "en": "Modes",
+              "de": "Modi"
+            },
+            "values": [
+              {
+                "id": "off",
+                "title": {
+                  "en": "Off",
+                  "de": "Aus"
+                }
+              },
+              {
+                "id": "day",
+                "title": {
+                  "en": "Adaptive",
+                  "de": "Adaptiv"
+                }
+              },
+              {
+                "id": "night",
+                "title": {
+                  "en": "Night",
+                  "de": "Nacht"
+                }
+              }
+            ]
           }
         ]
       }

@@ -72,74 +72,135 @@ class ZoneDriver extends Homey.Driver {
       this.homey.app.trace(`driver.onInit: mode_is registration failed: ${err.message}`);
     }
 
+    const autocompleteListener = async (query) => this._findLightTargets(query);
+
     try {
       const smartOn = this.homey.flow.getActionCard('smart_on');
-
-      smartOn.registerArgumentAutocompleteListener('target', async (query) => {
-        const { devices: all, zones } = await this.homey.app.getDevicesAndZones();
-        const q = (query || '').toLowerCase();
-        const items = [];
-        for (const d of Object.values(all)) {
-          if (d.driverId === 'homey:app:com.3cheesehigh.lumina:zone') continue;
-          const caps = d.capabilities || [];
-          if (!caps.includes('onoff')) continue;
-          if (!caps.includes('dim') && !caps.includes('light_temperature')) continue;
-          const name = d.name || '';
-          const zoneName = zones[d.zone]?.name || '';
-          // Match against both name and zone name so the user can type either.
-          const hay = `${name} ${zoneName}`.toLowerCase();
-          if (q && !hay.includes(q)) continue;
-          items.push({
-            id: d.id,
-            // Fold the zone into the displayed name so it's visible regardless
-            // of how the Homey UI renders the description field.
-            name: zoneName ? `${name} (${zoneName})` : name,
-            description: zoneName,
-          });
-        }
-        items.sort((a, b) => a.name.localeCompare(b.name));
-        return items.slice(0, 50);
-      });
-
+      smartOn.registerArgumentAutocompleteListener('target', autocompleteListener);
       smartOn.registerRunListener(async (args) => {
-        const sel = args.target;
-        if (!sel || !sel.id) throw new Error('no target chosen');
-
-        // Look up the live device wrapper so we can read its capabilities.
-        const { devices: allDevices } = await this.homey.app.getDevicesAndZones();
-        const target = allDevices[sel.id];
-        if (!target) throw new Error(`target ${sel.id} not found`);
-
-        // Pick the Lumina Zone whose membership covers this light. Falls back
-        // to the default group's curve if no zone claims this lamp.
-        let zoneDev = null;
-        for (const z of this.getDevices()) {
-          if (z.hasMemberId && z.hasMemberId(target.id)) { zoneDev = z; break; }
-        }
-        const v = zoneDev ? zoneDev.getCurrentValues() : this._defaultValues();
-        if (!v) throw new Error('no adaptive values available (no default group?)');
-
-        this.homey.app.trace(`flow: smart_on -> ${target.name} via zone=${zoneDev?.getName() ?? 'default'} -> ${v.kelvin}K / ${v.dimPct}%`);
-
-        const caps = target.capabilities || [];
-        const writes = [];
-        if (caps.includes('dim')) {
-          writes.push(this._api.devices.setCapabilityValue({
-            deviceId: target.id, capabilityId: 'dim', value: v.dimPct / 100,
-          }));
-        }
-        if (caps.includes('light_temperature')) {
-          writes.push(this._api.devices.setCapabilityValue({
-            deviceId: target.id, capabilityId: 'light_temperature',
-            value: kelvinToLightTemperature(v.kelvin),
-          }));
-        }
-        await Promise.all(writes);
+        const target = await this._resolveLightTarget(args.target);
+        this.homey.app.trace(`flow: smart_on -> ${target.name}`);
+        await this._performSmartOn(target);
       });
       this.homey.app.trace('driver.onInit: smart_on action registered');
     } catch (err) {
       this.homey.app.trace(`driver.onInit: smart_on registration failed: ${err.message}`);
     }
+
+    try {
+      const smartToggle = this.homey.flow.getActionCard('smart_toggle');
+      smartToggle.registerArgumentAutocompleteListener('target', autocompleteListener);
+      smartToggle.registerRunListener(async (args) => {
+        const target = await this._resolveLightTarget(args.target);
+        const isOn = await this._api.devices.getCapabilityValue({
+          deviceId: target.id, capabilityId: 'onoff',
+        });
+        if (isOn === true) {
+          this.homey.app.trace(`flow: smart_toggle -> ${target.name} on, turning off`);
+          await this._api.devices.setCapabilityValue({
+            deviceId: target.id, capabilityId: 'onoff', value: false,
+          });
+        } else {
+          this.homey.app.trace(`flow: smart_toggle -> ${target.name} off, smart-on`);
+          await this._performSmartOn(target);
+        }
+      });
+      this.homey.app.trace('driver.onInit: smart_toggle action registered');
+    } catch (err) {
+      this.homey.app.trace(`driver.onInit: smart_toggle registration failed: ${err.message}`);
+    }
+
+    try {
+      const cycleMode = this.homey.flow.getActionCard('cycle_mode');
+      cycleMode.registerRunListener(async (args) => {
+        const dev = args.device;
+        // Multiselect arrives as an array of selected ids; normalise the
+        // user's pick into our canonical off → day → night ordering so the
+        // cycle direction is predictable regardless of selection order.
+        const selected = Array.isArray(args.modes) ? args.modes : [];
+        const sequence = ['off', 'day', 'night'].filter((m) => selected.includes(m));
+        if (sequence.length === 0) {
+          throw new Error('select at least one mode to cycle through');
+        }
+        const current = dev.getCapabilityValue('adaptive_mode');
+        const curIdx = sequence.indexOf(current);
+        // If the current mode isn't in the cycle, jump to the first selected
+        // mode -- otherwise advance to the next one, wrapping around.
+        const nextIdx = curIdx >= 0 ? (curIdx + 1) % sequence.length : 0;
+        const next = sequence[nextIdx];
+        this.homey.app.trace(`flow: cycle_mode -> ${dev.getName()} ${current} -> ${next} (cycle: ${sequence.join('->')})`);
+        await dev.triggerCapabilityListener('adaptive_mode', next);
+      });
+      this.homey.app.trace('driver.onInit: cycle_mode action registered');
+    } catch (err) {
+      this.homey.app.trace(`driver.onInit: cycle_mode registration failed: ${err.message}`);
+    }
+  }
+
+  // Autocomplete source for smart-on / smart-toggle: any device with onoff
+  // plus at least one of dim/light_temperature, excluding our own zones.
+  async _findLightTargets(query) {
+    const { devices: all, zones } = await this.homey.app.getDevicesAndZones();
+    const q = (query || '').toLowerCase();
+    const items = [];
+    for (const d of Object.values(all)) {
+      if (d.driverId === 'homey:app:com.3cheesehigh.lumina:zone') continue;
+      const caps = d.capabilities || [];
+      if (!caps.includes('onoff')) continue;
+      if (!caps.includes('dim') && !caps.includes('light_temperature')) continue;
+      const name = d.name || '';
+      const zoneName = zones[d.zone]?.name || '';
+      // Match against both name and zone name so the user can type either.
+      const hay = `${name} ${zoneName}`.toLowerCase();
+      if (q && !hay.includes(q)) continue;
+      items.push({
+        id: d.id,
+        // Fold the zone into the displayed name so it's visible regardless
+        // of how the Homey UI renders the description field.
+        name: zoneName ? `${name} (${zoneName})` : name,
+        description: zoneName,
+      });
+    }
+    items.sort((a, b) => a.name.localeCompare(b.name));
+    return items.slice(0, 50);
+  }
+
+  async _resolveLightTarget(sel) {
+    if (!sel || !sel.id) throw new Error('no target chosen');
+    const { devices: allDevices } = await this.homey.app.getDevicesAndZones();
+    const target = allDevices[sel.id];
+    if (!target) throw new Error(`target ${sel.id} not found`);
+    return target;
+  }
+
+  // Off-to-on transition with adaptive values: writes dim + light_temperature
+  // in one shot so the lamp wakes at the right state instead of flashing the
+  // last stored value. Modern bulbs treat a dim write while off as power-on
+  // at that level, so we don't need to send onoff=true separately.
+  async _performSmartOn(target) {
+    let zoneDev = null;
+    for (const z of this.getDevices()) {
+      if (z.hasMemberId && z.hasMemberId(target.id)) { zoneDev = z; break; }
+    }
+    const v = zoneDev ? zoneDev.getCurrentValues() : this._defaultValues();
+    if (!v) throw new Error('no adaptive values available (no default group?)');
+
+    this.homey.app.trace(`smart-on writes -> ${target.name} via zone=${zoneDev?.getName() ?? 'default'} -> ${v.kelvin}K / ${v.dimPct}%`);
+
+    const caps = target.capabilities || [];
+    const writes = [];
+    if (caps.includes('dim')) {
+      writes.push(this._api.devices.setCapabilityValue({
+        deviceId: target.id, capabilityId: 'dim', value: v.dimPct / 100,
+      }));
+    }
+    if (caps.includes('light_temperature')) {
+      writes.push(this._api.devices.setCapabilityValue({
+        deviceId: target.id, capabilityId: 'light_temperature',
+        value: kelvinToLightTemperature(v.kelvin),
+      }));
+    }
+    await Promise.all(writes);
   }
 
   _computeCurveForUI(payload) {
@@ -192,7 +253,7 @@ class ZoneDriver extends Homey.Driver {
       const overrides = trimOverrides(groups, draft.groupId, draft.overrides);
       this.homey.app.trace(`pair: list_devices -- name=${draft.name}, group=${draft.groupId}, overrides=${Object.keys(overrides).length}`);
       return [{
-        name: draft.name || 'Lumina-Zone',
+        name: draft.name || 'Lumina Zone',
         data: { id: `zone-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
         store: { groupId: draft.groupId || 'default', overrides },
       }];
@@ -227,7 +288,7 @@ class ZoneDriver extends Homey.Driver {
       this.homey.app.trace(`repair: save_changes -- name=${payload?.name}, group=${payload?.groupId || '-'}`);
       if (!payload) return false;
       if (payload.name && payload.name !== device.getName()) {
-        await device.setName(payload.name.toString().trim() || 'Lumina-Zone');
+        await device.setName(payload.name.toString().trim() || 'Lumina Zone');
       }
       const groups = this.homey.settings.get('groups') || {};
       const groupId = payload.groupId || 'default';
