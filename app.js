@@ -34,6 +34,7 @@ class LuminaApp extends Homey.App {
     await this._zones.start();
 
     await this._registerFlowCards();
+    await this._registerWidgets();
   }
 
   async onUninit() {
@@ -141,6 +142,17 @@ class LuminaApp extends Homey.App {
       });
     }, 'condition');
 
+    this._tryRegister('mode_changed', (card) => {
+      card.registerArgumentAutocompleteListener('zone', zoneAutocomplete);
+      // The runListener filters by the user's selected (zone, mode) tuple --
+      // the trigger card itself fires on every mode change, this listener
+      // narrows it to the rows the user actually wired up.
+      card.registerRunListener(async (args, state) => {
+        return state.bereichId === args.zone?.id && state.mode === args.mode;
+      });
+      this._modeChangedTrigger = card;
+    }, 'trigger');
+
     this._tryRegister('cycle_mode', (card) => {
       card.registerArgumentAutocompleteListener('zone', zoneAutocomplete);
       card.registerRunListener(async (args) => {
@@ -243,16 +255,55 @@ class LuminaApp extends Homey.App {
     });
   }
 
+  // Dashboard widgets: register backend autocomplete + state hooks.
+  // Wrapped in try/catch because dashboards.getWidget is firmware-gated
+  // (>=12.3) and we don't want a startup crash on slightly older Homeys.
+  async _registerWidgets() {
+    try {
+      const widget = this.homey.dashboards.getWidget('zone-mode');
+      widget.registerSettingAutocompleteListener('zone', async (query) => {
+        const q = (query || '').toLowerCase();
+        const { zones: allZones } = await this.getDevicesAndZones();
+        const items = [];
+        for (const rt of this._zones.listRuntimes()) {
+          const name = rt._homeyZoneName || allZones[rt.bereichId]?.name || rt.bereichId;
+          if (q && !name.toLowerCase().includes(q)) continue;
+          items.push({ id: rt.bereichId, name });
+        }
+        items.sort((a, b) => a.name.localeCompare(b.name));
+        return items.slice(0, 50);
+      });
+      this.trace('widget registered: zone-mode');
+    } catch (err) {
+      this.trace(`widget registration failed: ${err.message}`);
+    }
+  }
+
   _tryRegister(cardId, setup, kind = 'action') {
     try {
       const card = kind === 'condition'
         ? this.homey.flow.getConditionCard(cardId)
-        : this.homey.flow.getActionCard(cardId);
+        : kind === 'trigger'
+          ? this.homey.flow.getTriggerCard(cardId)
+          : this.homey.flow.getActionCard(cardId);
       setup(card);
       this.trace(`flow card registered: ${cardId} (${kind})`);
     } catch (err) {
       this.trace(`flow card registration failed: ${cardId} -- ${err.message}`);
     }
+  }
+
+  // Called by ZoneRuntime.setMode after the new mode is persisted. We pass
+  // (tokens, state) -- state is what the trigger card's runListener filters
+  // on (bereichId + mode), tokens are flow-tag values exposed to downstream
+  // cards.
+  fireModeChanged(bereichId, mode, runtime) {
+    if (!this._modeChangedTrigger) return;
+    const tokens = { zone: runtime?._homeyZoneName || bereichId, mode };
+    const state = { bereichId, mode };
+    this._modeChangedTrigger.trigger(tokens, state).catch(err =>
+      this.trace(`mode_changed trigger emit failed: ${err.message}`)
+    );
   }
 
   // Fallback adaptive values for smart-on when the target light is not a

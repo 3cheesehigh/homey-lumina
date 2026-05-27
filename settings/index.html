@@ -21,7 +21,12 @@
   input[type=number] { width: 110px; padding: .35em; border: 1px solid #ddd; border-radius: 4px; text-align: right; }
   input[type=text], select { padding: .4em; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
   .group-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: .8em 1em; margin: .6em 0; }
-  .group-card h4 { margin: 0 0 .4em; }
+  .group-card h4 { margin: 0; display: flex; align-items: center; gap: .5em; }
+  .group-card h4 .chev { font-size: .8em; color: #888; width: .8em; display: inline-block; cursor: pointer; user-select: none; flex-shrink: 0; transform: rotate(90deg); transition: transform .12s; }
+  .group-card.collapsed h4 .chev { transform: rotate(0deg); }
+  .group-card h4 input.g-name { flex: 1; }
+  .group-card .group-body { display: block; margin-top: .4em; }
+  .group-card.collapsed .group-body { display: none; }
   .group-card .actions { margin-top: 1em; display: flex; gap: .5em; justify-content: flex-end; }
   .color-row { display: flex; gap: .5em; align-items: center; margin: .25em 0; }
   .color-row label { flex: 1; color: #555; font-size: .9em; }
@@ -46,15 +51,28 @@
   .zone-row.open .zone-head .chev { transform: rotate(90deg); display: inline-block; }
   .exclude-section { margin: .8em 0 .2em; padding: .5em .6em; background: #fff; border: 1px solid #eee; border-radius: 6px; }
   .exclude-section .exclude-title { font-weight: 600; font-size: .9em; margin-bottom: .15em; }
-  .exclude-section .exclude-hint { color: #888; font-size: .8em; margin-bottom: .4em; }
-  .exclude-section .exclude-row { display: flex; align-items: center; gap: .5em; padding: .15em 0; font-size: .9em; }
+  .exclude-section .exclude-hint { color: #888; font-size: .8em; margin-bottom: .4em; line-height: 1.35; }
   .exclude-section .exclude-empty { color: #999; font-size: .85em; padding: .2em 0; }
+  .lamp-row { display: flex; align-items: center; gap: .5em; padding: .25em 0; font-size: .85em; border-top: 1px solid #f0f0f0; }
+  .lamp-row:first-child { border-top: 0; }
+  .lamp-row .lamp-name { flex: 1; display: flex; align-items: center; gap: .4em; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lamp-row .lamp-name input[type=checkbox] { flex-shrink: 0; }
+  .lamp-row.excluded .lamp-name span { text-decoration: line-through; color: #999; }
+  .lamp-row .tuning { display: flex; gap: .3em; align-items: center; }
+  .lamp-row .tuning label { color: #888; font-size: .75em; display: flex; align-items: center; gap: .15em; }
+  .lamp-row .tuning input[type=number] { width: 60px; padding: .2em .3em; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-size: .8em; }
+  .lamp-row.excluded .tuning { opacity: 0.35; pointer-events: none; }
   #status { margin-top: 1em; padding: .6em; border-radius: 4px; font-size: .9em; display: none; }
   #status.ok { background: #efe; color: #060; display: block; }
   #status.error { background: #fee; color: #c00; display: block; }
   .empty-hint { color: #999; font-style: italic; padding: .4em 0; }
   .assign-row { display: flex; gap: .4em; align-items: center; margin: .8em 0 .2em; }
   .assign-row select { flex: 1; }
+  .log-controls { display: flex; gap: .6em; align-items: center; margin-bottom: .4em; }
+  .log-controls label { font-size: .85em; color: #666; }
+  .range-row input[type=range] { flex: 1; max-width: 240px; }
+  .range-row .range-value { min-width: 56px; text-align: right; color: #555; font-variant-numeric: tabular-nums; font-size: .85em; }
+  .log-view { max-height: 280px; overflow-y: auto; background: #f7f7f7; border: 1px solid #e0e0e0; border-radius: 6px; padding: .6em .8em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75em; line-height: 1.35; color: #333; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -81,6 +99,14 @@
 
 <div id="status"></div>
 
+<h3 data-i18n="logHeading">Log</h3>
+<p class="hint" data-i18n="logIntro">Last ~300 events. Useful for debugging "why isn't my lamp following Lumina?".</p>
+<div class="log-controls">
+  <button id="logRefresh" data-i18n="logRefresh">Refresh</button>
+  <label class="log-auto"><input type="checkbox" id="logAuto"> <span data-i18n="logAuto">Auto-refresh</span></label>
+</div>
+<pre id="logView" class="log-view">…</pre>
+
 <script type="text/javascript">
 const I18N = {
   en: {
@@ -101,6 +127,7 @@ const I18N = {
     defaultGroupName: 'Group',
     emptyGroups: 'No groups yet — create one.',
     sectionDay: 'Day',
+    sectionTransitions: 'Transitions (sunrise / sunset offsets)',
     sectionNight: 'Night',
     nightColorLabel: 'Coloured night light instead of Kelvin',
     inheritedSwatchLabel: '→ inherits:',
@@ -129,10 +156,19 @@ const I18N = {
     zoneSaveFailed: 'Save failed: ',
     zoneRemoveFailed: 'Remove failed: ',
     zoneNightColorLabel: 'Custom night colour (overrides group)',
-    excludeLightsTitle: 'Excluded lights',
-    excludeLightsHint: 'Tick the lamps Lumina should leave alone in this Bereich.',
+    excludeLightsTitle: 'Lights in this Bereich',
+    excludeLightsHint: 'Per lamp: tick to exclude Lumina control. Optional dim-scale (e.g. 0.7 = 70% of computed) and Kelvin offset (e.g. -200 = 200 K warmer) compensate for relative brightness/temperature mismatches.',
     excludeLightsEmpty: 'No lamps resolved in this Bereich yet.',
+    lampExclude: 'exclude',
+    lampScale: 'dim ×',
+    lampOffset: 'K ±',
     nowLabel: 'now',
+    logHeading: 'Log',
+    logIntro: 'Last ~300 events. Useful for debugging "why isn\'t my lamp following Lumina?".',
+    logRefresh: 'Refresh',
+    logAuto: 'Auto-refresh',
+    logEmpty: '(no entries yet)',
+    logLoadFailed: 'Failed to load log: ',
     fieldsLoadFailed: 'Failed to load fields: ',
     zonesLoadFailed: 'Failed to load zones: '
   },
@@ -154,6 +190,7 @@ const I18N = {
     defaultGroupName: 'Gruppe',
     emptyGroups: 'Noch keine Gruppen — leg eine an.',
     sectionDay: 'Tag',
+    sectionTransitions: 'Übergänge (Sonnenauf-/-untergang)',
     sectionNight: 'Nacht',
     nightColorLabel: 'Farbiges Nachtlicht statt Kelvin',
     inheritedSwatchLabel: '→ erbt:',
@@ -182,10 +219,19 @@ const I18N = {
     zoneSaveFailed: 'Speichern fehlgeschlagen: ',
     zoneRemoveFailed: 'Entfernen fehlgeschlagen: ',
     zoneNightColorLabel: 'Eigene Nachtfarbe (überschreibt Gruppe)',
-    excludeLightsTitle: 'Ausgenommene Lampen',
-    excludeLightsHint: 'Lampen anhaken, die Lumina in diesem Bereich in Ruhe lassen soll.',
+    excludeLightsTitle: 'Lampen in diesem Bereich',
+    excludeLightsHint: 'Pro Lampe: Häkchen = Lumina lässt sie in Ruhe. Optional Helligkeits-Faktor (z.B. 0.7 = 70% des berechneten Werts) und Kelvin-Offset (z.B. -200 = 200 K wärmer), um Unterschiede zwischen Lampen auszugleichen.',
     excludeLightsEmpty: 'In diesem Bereich sind noch keine Lampen aufgelöst.',
+    lampExclude: 'aus',
+    lampScale: 'Dim ×',
+    lampOffset: 'K ±',
     nowLabel: 'jetzt',
+    logHeading: 'Log',
+    logIntro: 'Letzte ~300 Ereignisse. Nützlich zum Debuggen von "warum folgt meine Lampe Lumina nicht?".',
+    logRefresh: 'Aktualisieren',
+    logAuto: 'Auto-aktualisieren',
+    logEmpty: '(noch keine Einträge)',
+    logLoadFailed: 'Log laden fehlgeschlagen: ',
     fieldsLoadFailed: 'Felder laden fehlgeschlagen: ',
     zonesLoadFailed: 'Bereiche laden fehlgeschlagen: '
   }
@@ -229,16 +275,27 @@ function renderGroups() {
 }
 
 function renderGroupCard(gid, g) {
-  const sections = { day: [], night: [] };
-  for (const f of FIELDS) sections[f.section].push(f);
-  const sectionTitle = { day: t('sectionDay'), night: t('sectionNight') };
+  const sections = {};
+  for (const f of FIELDS) {
+    if (!sections[f.section]) sections[f.section] = [];
+    sections[f.section].push(f);
+  }
+  const sectionTitle = { day: t('sectionDay'), transitions: t('sectionTransitions'), night: t('sectionNight') };
   const sectionsHtml = Object.entries(sections).map(([sec, fields]) => {
-    const fieldsHtml = fields.map(f =>
-      `<div class="field-row">
+    const fieldsHtml = fields.map(f => {
+      const cur = g[f.key] ?? f.defaultValue;
+      if (f.inputType === 'range') {
+        return `<div class="field-row range-row">
+          <label>${escapeHtml(fieldLabel(f))}</label>
+          <input type="range" data-key="${f.key}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${cur}">
+          <span class="range-value" data-for="${f.key}">${cur}${f.unit ? ' '+f.unit : ''}</span>
+        </div>`;
+      }
+      return `<div class="field-row">
         <label>${escapeHtml(fieldLabel(f))}${f.unit ? ' ('+f.unit+')' : ''}</label>
-        <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" value="${g[f.key] ?? f.defaultValue}">
-      </div>`
-    ).join('');
+        <input type="number" data-key="${f.key}" min="${f.min}" max="${f.max}" value="${cur}">
+      </div>`;
+    }).join('');
     const extra = sec === 'night' ? renderNightColorRow({ scope: 'g', hex: g.nightColor || '', labelOn: t('nightColorLabel') }) : '';
     return `<div class="section-label">${escapeHtml(sectionTitle[sec] || sec)}</div>${fieldsHtml}${extra}`;
   }).join('');
@@ -270,22 +327,27 @@ function renderGroupCard(gid, g) {
     : `<div class="hint">${escapeHtml(t('noBereicheAvailable'))}</div>`;
 
   return `<div class="group-card" data-id="${escapeHtml(gid)}">
-    <h4><input type="text" class="g-name" value="${escapeHtml(g.name || '')}"></h4>
-    <div class="curve-card" data-curve>
-      <div class="curve-meta">
-        <span>${escapeHtml(t('nowLabel'))}: <strong class="curve-now">—</strong></span>
-        <span>↑ <strong class="curve-sunrise">—</strong></span>
-        <span>↓ <strong class="curve-sunset">—</strong></span>
+    <h4>
+      <span class="chev">▶</span>
+      <input type="text" class="g-name" value="${escapeHtml(g.name || '')}">
+    </h4>
+    <div class="group-body">
+      <div class="curve-card" data-curve>
+        <div class="curve-meta">
+          <span>${escapeHtml(t('nowLabel'))}: <strong class="curve-now">—</strong></span>
+          <span>↑ <strong class="curve-sunrise">—</strong></span>
+          <span>↓ <strong class="curve-sunset">—</strong></span>
+        </div>
+        <div class="curve-svg"></div>
       </div>
-      <div class="curve-svg"></div>
-    </div>
-    ${sectionsHtml}
-    <div class="section-label">${escapeHtml(t('zonesHeading'))}</div>
-    ${zonesHtml}
-    ${assignDropdown}
-    <div class="actions">
-      <button class="danger g-delete">${escapeHtml(t('deleteBtn'))}</button>
-      <button class="primary g-save">${escapeHtml(t('save'))}</button>
+      ${sectionsHtml}
+      <div class="section-label">${escapeHtml(t('zonesHeading'))}</div>
+      ${zonesHtml}
+      ${assignDropdown}
+      <div class="actions">
+        <button class="danger g-delete">${escapeHtml(t('deleteBtn'))}</button>
+        <button class="primary g-save">${escapeHtml(t('save'))}</button>
+      </div>
     </div>
   </div>`;
 }
@@ -348,21 +410,39 @@ function renderZoneRow(z) {
 function wireGroupCard(card, gid) {
   card.querySelector('.g-save').addEventListener('click', () => saveGroup(gid, card));
   card.querySelector('.g-delete').addEventListener('click', () => deleteGroup(gid));
+  const chev = card.querySelector('h4 .chev');
+  if (chev) {
+    chev.addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+      // Curve re-render after expanding so the SVG sizes correctly when the
+      // card was created collapsed (display: none breaks the layout-dependent
+      // SVG measurement).
+      if (!card.classList.contains('collapsed')) {
+        refreshCurve(card.querySelector(':scope > .group-body > [data-curve]') || card);
+      }
+    });
+  }
   const colorOn = card.querySelector('.g-night-color-on');
   const wrap = card.querySelector('.color-row .picker-wrap');
   if (colorOn && wrap) {
     colorOn.addEventListener('change', () => wrap.classList.toggle('off', !colorOn.checked));
   }
-  // Group-level curve preview updates as user types into the group's number fields.
-  // We scope the selector to the group's IMMEDIATE inputs (not inside zone rows).
-  card.querySelectorAll(':scope > .field-row input[type=number], :scope > [data-section] input[type=number]').forEach(() => {});
-  // Simpler approach: any number input directly inside the group card (not a zone row).
-  card.querySelectorAll('input[type=number]').forEach(inp => {
-    // Only listen on group-level fields, not zone fields.
+  // Curve preview should update live for any group-level input change (number or range).
+  card.querySelectorAll('input[type=number], input[type=range]').forEach(inp => {
     if (inp.closest('.zone-row')) return;
-    inp.addEventListener('input', () => refreshCurveDebounced(card.querySelector(':scope > [data-curve]') || card));
+    inp.addEventListener('input', () => refreshCurveDebounced(card.querySelector(':scope > .group-body > [data-curve]') || card));
   });
-  refreshCurve(card.querySelector(':scope > [data-curve]') || card);
+  // Range inputs also drive their adjacent value label so the user sees what
+  // they're dragging to without having to read the slider's native tooltip.
+  card.querySelectorAll('input[type=range]').forEach(inp => {
+    if (inp.closest('.zone-row')) return;
+    const label = card.querySelector(`.range-value[data-for="${inp.dataset.key}"]`);
+    if (!label) return;
+    const unit = label.textContent.replace(/^-?\d+(\.\d+)?\s*/, '');
+    const update = () => { label.textContent = `${inp.value}${unit ? ' ' + unit : ''}`.trim(); };
+    inp.addEventListener('input', update);
+  });
+  refreshCurve(card.querySelector(':scope > .group-body > [data-curve]') || card);
 
   // Wire zone rows inside this group.
   card.querySelectorAll('.zone-row').forEach(row => {
@@ -409,21 +489,24 @@ function wireZoneRow(row, z) {
   row.querySelectorAll('input[type=number]').forEach(inp => {
     inp.addEventListener('input', () => refreshCurveDebounced(row));
   });
+  // Live-toggle the lamp-row's excluded styling so the strike-through and
+  // greyed-out tuning inputs reflect the user's current intent before save.
+  row.querySelectorAll('.lamp-row .z-exclude').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const lampRow = cb.closest('.lamp-row');
+      if (lampRow) lampRow.classList.toggle('excluded', cb.checked);
+    });
+  });
 }
 
 function saveGroup(gid, card) {
   const updated = { name: card.querySelector('.g-name').value.trim() || t('defaultGroupName') };
-  for (const f of FIELDS) {
-    const el = card.querySelector(`:scope > .field-row input[data-key="${f.key}"], :scope > [data-section] input[data-key="${f.key}"]`);
-    if (el) updated[f.key] = Number(el.value);
-  }
-  // Fallback: pick all number inputs at group level that aren't inside zone rows.
-  if (Object.keys(updated).length <= 1) {
-    card.querySelectorAll('input[type=number]').forEach(inp => {
-      if (inp.closest('.zone-row')) return;
-      if (inp.dataset.key) updated[inp.dataset.key] = Number(inp.value);
-    });
-  }
+  // Pick all group-level field inputs (numbers and ranges), skipping any
+  // inside nested zone rows.
+  card.querySelectorAll('input[type=number], input[type=range]').forEach(inp => {
+    if (inp.closest('.zone-row')) return;
+    if (inp.dataset.key) updated[inp.dataset.key] = Number(inp.value);
+  });
   const gColorOn = card.querySelector('.g-night-color-on');
   const gColorVal = card.querySelector('.g-night-color')?.value;
   if (gColorOn?.checked && /^#[0-9a-f]{6}$/i.test(gColorVal || '')) {
@@ -480,7 +563,21 @@ function saveZone(row, z) {
   row.querySelectorAll('.z-exclude:checked').forEach(cb => {
     if (cb.dataset.lightId) excludedLights.push(cb.dataset.lightId);
   });
-  const body = { bereichId: z.bereichId, mode, overrides, excludedLights };
+  // Per-lamp tuning: collect dim-scale + temp-offset entries that differ from
+  // the defaults. The backend's _cleanLampOverrides drops effectively-empty
+  // entries again, so it's safe to send whatever the user typed.
+  const lampOverrides = {};
+  row.querySelectorAll('.lamp-row').forEach(lampRow => {
+    const id = lampRow.dataset.lightId;
+    if (!id) return;
+    const scale = Number(lampRow.querySelector('.z-dim-scale')?.value);
+    const offset = Number(lampRow.querySelector('.z-temp-offset')?.value);
+    const entry = {};
+    if (Number.isFinite(scale) && scale > 0 && scale !== 1) entry.dimScale = scale;
+    if (Number.isFinite(offset) && offset !== 0) entry.tempOffsetK = offset;
+    if (Object.keys(entry).length) lampOverrides[id] = entry;
+  });
+  const body = { bereichId: z.bereichId, mode, overrides, excludedLights, lampOverrides };
   HomeyRef.api('POST', '/zones/upsert', body, (err) => {
     if (err) { setStatus(t('zoneSaveFailed') + err, 'error'); return; }
     setStatus(t('zoneSaved', { name: z.homeyZoneName || z.bereichId }), 'ok');
@@ -525,12 +622,26 @@ function renderNightColorRow({ scope, hex, labelOn, inheritedHex }) {
 function renderExcludeList(zone) {
   const members = Array.isArray(zone.members) ? zone.members : [];
   const excluded = new Set(zone.excludedLights || []);
+  const tuning = zone.lampOverrides || {};
   const body = members.length
-    ? members.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(m =>
-        `<label class="exclude-row">
-          <input type="checkbox" class="z-exclude" data-light-id="${escapeHtml(m.id)}" ${excluded.has(m.id) ? 'checked' : ''}>
-          <span>${escapeHtml(m.name || m.id)}</span>
-        </label>`).join('')
+    ? members.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(m => {
+        const isExcluded = excluded.has(m.id);
+        const t0 = tuning[m.id] || {};
+        const scaleVal = (typeof t0.dimScale === 'number') ? t0.dimScale : '';
+        const offsetVal = (typeof t0.tempOffsetK === 'number') ? t0.tempOffsetK : '';
+        return `<div class="lamp-row ${isExcluded ? 'excluded' : ''}" data-light-id="${escapeHtml(m.id)}">
+          <label class="lamp-name">
+            <input type="checkbox" class="z-exclude" data-light-id="${escapeHtml(m.id)}" ${isExcluded ? 'checked' : ''} title="${escapeHtml(t('lampExclude'))}">
+            <span>${escapeHtml(m.name || m.id)}</span>
+          </label>
+          <div class="tuning">
+            <label>${escapeHtml(t('lampScale'))}<input type="number" class="z-dim-scale" data-light-id="${escapeHtml(m.id)}"
+              min="0.1" max="2" step="0.05" placeholder="1.0" value="${scaleVal}"></label>
+            <label>${escapeHtml(t('lampOffset'))}<input type="number" class="z-temp-offset" data-light-id="${escapeHtml(m.id)}"
+              min="-2000" max="2000" step="50" placeholder="0" value="${offsetVal}"></label>
+          </div>
+        </div>`;
+      }).join('')
     : `<div class="exclude-empty">${escapeHtml(t('excludeLightsEmpty'))}</div>`;
   return `<div class="exclude-section">
     <div class="exclude-title">${escapeHtml(t('excludeLightsTitle'))}</div>
@@ -550,7 +661,7 @@ function refreshCurveDebounced(host) {
 function refreshCurve(host) {
   // host can be either a .zone-row (zone preview) or a .group-card / its
   // direct curve-card container (group preview).
-  let day, night;
+  let day, night, transitions;
   const zoneRow = host.closest ? host.closest('.zone-row') : null;
   if (zoneRow) {
     const bereichId = zoneRow.dataset.bereichId;
@@ -565,6 +676,10 @@ function refreshCurve(host) {
     night = {
       kelvin: numOrInherit(zoneRow, 'nightKelvin', g.nightKelvin),
       dim:    numOrInherit(zoneRow, 'nightDim',    g.nightDim),
+    };
+    transitions = {
+      sunriseOffsetMin: numOrInherit(zoneRow, 'sunriseOffsetMin', g.sunriseOffsetMin || 0),
+      sunsetOffsetMin:  numOrInherit(zoneRow, 'sunsetOffsetMin',  g.sunsetOffsetMin  || 0),
     };
   } else {
     // Group-level: read directly from the group card's inputs (excluding zone-row inputs).
@@ -582,12 +697,16 @@ function refreshCurve(host) {
     night = {
       kelvin: get('nightKelvin'), dim: get('nightDim'),
     };
+    transitions = {
+      sunriseOffsetMin: get('sunriseOffsetMin') || 0,
+      sunsetOffsetMin:  get('sunsetOffsetMin')  || 0,
+    };
   }
-  HomeyRef.api('POST', '/curve', { day, night }, (err, data) => {
+  HomeyRef.api('POST', '/curve', { day, night, transitions }, (err, data) => {
     if (err || !data) return;
     const target = (host.closest && host.closest('.zone-row'))
       ? host.querySelector('.zone-edit [data-curve]') || host.closest('.zone-row').querySelector('[data-curve]')
-      : (host.closest('.group-card') || host).querySelector(':scope > [data-curve]');
+      : (host.closest('.group-card') || host).querySelector(':scope > .group-body > [data-curve]');
     if (!target) return;
     target.querySelector('.curve-now').textContent = data.nowLabel;
     target.querySelector('.curve-sunrise').textContent = data.sunriseLabel || '—';
@@ -605,7 +724,8 @@ function numOrInherit(row, key, fallback) {
 
 function renderCurveSvg(data, day) {
   const W = 320, H = 140;
-  const padL = 8, padR = 8, padT = 14, padB = 24;
+  // padT bumped up to make room for the sunrise/sunset icons above the chart.
+  const padL = 8, padR = 8, padT = 26, padB = 24;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
 
@@ -630,8 +750,23 @@ function renderCurveSvg(data, day) {
     return `<text x="${x}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#888">${h}</text>`;
   }).join('');
 
-  const sunMark = (h, fill) => h == null ? '' :
-    `<line x1="${xForHour(h).toFixed(1)}" y1="${baseY}" x2="${xForHour(h).toFixed(1)}" y2="${baseY + 6}" stroke="${fill}" stroke-width="2"/>`;
+  // Sunrise/sunset markers: a dashed vertical line through the chart with a
+  // small half-sun symbol in the bottom margin. Sunrise's half-sun sits
+  // ABOVE its horizon stroke, sunset's BELOW -- intuitive at a glance.
+  function eventMark(hour, kind) {
+    if (hour == null) return '';
+    const x = xForHour(hour);
+    const cx = x.toFixed(1);
+    const color = kind === 'sunrise' ? '#f59e0b' : '#475569';
+    // Half-sun + horizon stroke above the chart; dashed line picks up from
+    // there and runs down to the baseline.
+    const cy = 10;
+    const r = 4;
+    const dashed = `<line x1="${cx}" y1="${cy}" x2="${cx}" y2="${baseY}" stroke="${color}" stroke-dasharray="2 3" stroke-width="1" opacity="0.55"/>`;
+    const half = `<path d="M ${(x - r).toFixed(1)} ${cy} A ${r} ${r} 0 0 1 ${(x + r).toFixed(1)} ${cy} Z" fill="${color}"/>`;
+    const horizon = `<line x1="${(x - r - 1.5).toFixed(1)}" y1="${cy}" x2="${(x + r + 1.5).toFixed(1)}" y2="${cy}" stroke="${color}" stroke-width="1" stroke-linecap="round"/>`;
+    return half + horizon + dashed;
+  }
 
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;">
@@ -639,8 +774,8 @@ function renderCurveSvg(data, day) {
       <path d="${kelvinPath}" fill="#f59e0b" opacity="0.75"/>
       <line x1="${padL}" y1="${baseY}" x2="${W - padR}" y2="${baseY}" stroke="#999" stroke-width="0.5"/>
       ${ticks}
-      ${sunMark(data.sunriseHour, '#f59e0b')}
-      ${sunMark(data.sunsetHour, '#475569')}
+      ${eventMark(data.sunriseHour, 'sunrise')}
+      ${eventMark(data.sunsetHour, 'sunset')}
       <line x1="${nowX.toFixed(1)}" y1="${padT}" x2="${nowX.toFixed(1)}" y2="${baseY}" stroke="#111" stroke-width="1"/>
       <circle cx="${nowX.toFixed(1)}" cy="${yForKelvin(nowPoint.kelvin).toFixed(1)}" r="3" fill="#111"/>
       <text x="${nowX.toFixed(1)}" y="${padT - 2}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${nowPoint.kelvin}K / ${nowPoint.dimPct}%</text>
@@ -700,7 +835,32 @@ function onHomeyReady(Homey) {
     });
 
     document.getElementById('addGroup').addEventListener('click', addGroup);
+
+    document.getElementById('logRefresh').addEventListener('click', refreshLog);
+    document.getElementById('logAuto').addEventListener('change', toggleLogAuto);
+    refreshLog();
   });
+}
+
+// ----- log viewer -----
+
+let logTimer = null;
+function refreshLog() {
+  HomeyRef.api('GET', '/log', null, (err, lines) => {
+    const view = document.getElementById('logView');
+    if (err) { view.textContent = t('logLoadFailed') + err; return; }
+    if (!lines || lines.length === 0) { view.textContent = t('logEmpty'); return; }
+    view.textContent = lines.join('\n');
+    view.scrollTop = view.scrollHeight;
+  });
+}
+function toggleLogAuto() {
+  const on = document.getElementById('logAuto').checked;
+  if (logTimer) { clearInterval(logTimer); logTimer = null; }
+  if (on) {
+    refreshLog();
+    logTimer = setInterval(refreshLog, 5000);
+  }
 }
 </script>
 

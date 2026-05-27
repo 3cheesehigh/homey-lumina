@@ -23,6 +23,7 @@ function serializeRuntime(rt, allZones) {
     groupId: rt._config().groupId || 'default',
     overrides: rt._config().overrides || {},
     excludedLights: rt._config().excludedLights || [],
+    lampOverrides: rt._config().lampOverrides || {},
     mode: rt.getMode(),
     members: rt.getMemberCandidates(),
   };
@@ -79,6 +80,7 @@ module.exports = {
     }
     if (body.overrides != null) patch.overrides = body.overrides;
     if (body.excludedLights != null) patch.excludedLights = body.excludedLights;
+    if (body.lampOverrides != null) patch.lampOverrides = body.lampOverrides;
     if (body.mode != null) patch.mode = body.mode;
 
     const next = await controller.upsertZone(bereichId, patch);
@@ -100,6 +102,7 @@ module.exports = {
   async postCurve({ homey, body }) {
     const day = body?.day;
     const night = body?.night;
+    const transitions = body?.transitions;
     if (!day || !night) throw new Error('day and night required');
     const cleanDay = {
       kelvinMin: clampNumber('dayKelvinMin', day.kelvinMin),
@@ -112,6 +115,10 @@ module.exports = {
       dim: clampNumber('nightDim', night.dim),
       color: typeof night.color === 'string' ? night.color : undefined,
     };
-    return buildDailyCurve({ homey, day: cleanDay, night: cleanNight });
+    const cleanTransitions = transitions ? {
+      sunriseOffsetMin: clampNumber('sunriseOffsetMin', transitions.sunriseOffsetMin),
+      sunsetOffsetMin:  clampNumber('sunsetOffsetMin',  transitions.sunsetOffsetMin),
+    } : undefined;
+    return buildDailyCurve({ homey, day: cleanDay, night: cleanNight, transitions: cleanTransitions });
   },
 };

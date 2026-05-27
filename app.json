@@ -11,8 +11,8 @@
     "de": "Lumina"
   },
   "description": {
-    "en": "Cross-app sun-based color temperature and brightness control for lights paired through other Homey apps.",
-    "de": "App-übergreifende Steuerung von Farbtemperatur und Helligkeit anhand des Sonnenstands für Lampen aus anderen Homey-Apps."
+    "en": "Lights that follow the sun.",
+    "de": "Licht, das der Sonne folgt."
   },
   "category": [
     "tools"
@@ -229,6 +229,50 @@
         ]
       }
     ],
+    "triggers": [
+      {
+        "id": "mode_changed",
+        "title": {
+          "en": "Mode changed",
+          "de": "Modus geändert"
+        },
+        "titleFormatted": {
+          "en": "[[zone]] mode changed to [[mode]]",
+          "de": "[[zone]] Modus auf [[mode]] gewechselt"
+        },
+        "hint": {
+          "en": "Fires whenever the selected zone changes to the selected mode (via app, Flow, or widget).",
+          "de": "Wird ausgelöst, sobald der gewählte Bereich auf den gewählten Modus wechselt (über App, Flow oder Widget)."
+        },
+        "args": [
+          {
+            "name": "zone",
+            "type": "autocomplete",
+            "title": {
+              "en": "Zone",
+              "de": "Bereich"
+            },
+            "placeholder": {
+              "en": "Pick a zone…",
+              "de": "Bereich wählen…"
+            }
+          },
+          {
+            "name": "mode",
+            "type": "dropdown",
+            "title": {
+              "en": "Mode",
+              "de": "Modus"
+            },
+            "values": [
+              { "id": "off",   "label": { "en": "Off",      "de": "Aus" } },
+              { "id": "day",   "label": { "en": "Adaptive", "de": "Adaptiv" } },
+              { "id": "night", "label": { "en": "Night",    "de": "Nacht" } }
+            ]
+          }
+        ]
+      }
+    ],
     "conditions": [
       {
         "id": "mode_is",
@@ -287,6 +331,30 @@
         ]
       }
     ]
+  },
+  "widgets": {
+    "zone-mode": {
+      "id": "zone-mode",
+      "name": {
+        "en": "Lumina zone mode",
+        "de": "Lumina-Bereich Modus"
+      },
+      "height": 96,
+      "settings": [
+        {
+          "id": "zone",
+          "type": "autocomplete",
+          "title": {
+            "en": "Zone",
+            "de": "Bereich"
+          }
+        }
+      ],
+      "api": {
+        "getStatus": { "method": "GET", "path": "/status" },
+        "setMode": { "method": "POST", "path": "/mode" }
+      }
+    }
   },
   "images": {
     "small": "/assets/images/small.png",

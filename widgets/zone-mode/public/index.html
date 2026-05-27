@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; font-family: -apple-system, system-ui, sans-serif; background: transparent; color: #1a2238; }
+  .widget { padding: .6em .8em; box-sizing: border-box; }
+  .top { display: flex; align-items: center; gap: .5em; margin-bottom: .4em; }
+  .name { flex: 1; font-weight: 600; font-size: .95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .live { font-size: .75em; color: #888; white-space: nowrap; }
+  .buttons { display: flex; gap: .35em; }
+  .buttons button {
+    flex: 1; padding: .45em .2em; border: 1px solid #ddd; border-radius: 6px;
+    background: #f7f7f7; color: #333; font-size: .8em; cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .buttons button:hover { background: #eee; }
+  .buttons button.active { color: #fff; border-color: transparent; }
+  .buttons button.active[data-mode="off"]   { background: #6b7280; }
+  .buttons button.active[data-mode="day"]   { background: #f59e0b; }
+  .buttons button.active[data-mode="night"] { background: #1f2937; }
+  .empty { color: #888; font-size: .85em; text-align: center; padding: .8em 0; }
+  .err { color: #c00; font-size: .8em; }
+</style>
+</head>
+<body>
+<div class="widget">
+  <div id="content" class="empty">…</div>
+</div>
+
+<script type="text/javascript" src="/homey.js" data-origin="widget"></script>
+<script>
+const I18N = {
+  en: { pick: 'Open widget settings to pick a zone.', notFound: 'Zone not configured.', off: 'Off', day: 'Adaptive', night: 'Night', kelvin: 'K', dim: '%' },
+  de: { pick: 'Öffne die Widget-Einstellungen und wähle einen Bereich.', notFound: 'Bereich nicht konfiguriert.', off: 'Aus', day: 'Adaptiv', night: 'Nacht', kelvin: 'K', dim: '%' }
+};
+const LANG = (navigator.language || 'en').toLowerCase().startsWith('de') ? 'de' : 'en';
+const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k;
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+
+function onHomeyReady(Homey) {
+  try {
+    Homey.ready();
+  } catch (e) {
+    document.getElementById('content').textContent = 'Homey.ready failed: ' + e.message;
+    return;
+  }
+
+  const content = document.getElementById('content');
+  let bereichId = null;
+  let pollTimer = null;
+  let busy = false;
+
+  function showMessage(msg) {
+    content.className = 'empty';
+    content.textContent = msg;
+  }
+
+  function render(status) {
+    if (!status) { showMessage(t('notFound')); return; }
+    const mode = status.mode || 'day';
+    const live = (status.kelvin != null && status.dimPct != null)
+      ? `${status.kelvin}K · ${status.dimPct}%`
+      : '';
+    content.className = '';
+    content.innerHTML = `
+      <div class="top">
+        <span class="name">${escapeHtml(status.homeyZoneName || '')}</span>
+        <span class="live">${escapeHtml(live)}</span>
+      </div>
+      <div class="buttons">
+        <button data-mode="off"   class="${mode === 'off'   ? 'active' : ''}">${escapeHtml(t('off'))}</button>
+        <button data-mode="day"   class="${mode === 'day'   ? 'active' : ''}">${escapeHtml(t('day'))}</button>
+        <button data-mode="night" class="${mode === 'night' ? 'active' : ''}">${escapeHtml(t('night'))}</button>
+      </div>
+    `;
+    content.querySelectorAll('.buttons button').forEach(btn => {
+      btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
+  }
+
+  // Homey.api in widgets returns a Promise (per SDK v3). The settings page
+  // happens to also accept a callback variant, but widgets are stricter --
+  // mixing them yields "ghost" calls that never resolve, leaving the widget
+  // stuck on its empty state.
+  async function apiCall(method, path, body) {
+    return await Homey.api(method, path, body);
+  }
+
+  async function setMode(mode) {
+    if (busy || !bereichId) return;
+    busy = true;
+    content.querySelectorAll('.buttons button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    try {
+      await apiCall('POST', '/mode', { bereichId, mode });
+      await refresh();
+    } catch (err) {
+      showMessage('' + err);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function refresh() {
+    if (!bereichId) { showMessage(t('pick')); return; }
+    try {
+      const status = await apiCall('GET', `/status?bereichId=${encodeURIComponent(bereichId)}`);
+      render(status);
+    } catch (err) {
+      showMessage('' + err);
+    }
+  }
+
+  function start() {
+    try {
+      const settings = (typeof Homey.getSettings === 'function' ? Homey.getSettings() : {}) || {};
+      bereichId = settings.zone?.id || null;
+    } catch (e) {
+      bereichId = null;
+    }
+    refresh();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(refresh, 30000);
+  }
+
+  start();
+}
+
+// Surface any uncaught script error visibly instead of leaving the widget
+// blank -- without devtools we'd otherwise be guessing in production.
+window.addEventListener('error', (ev) => {
+  const el = document.getElementById('content');
+  if (el) { el.className = 'err'; el.textContent = 'JS error: ' + (ev.message || ev.error); }
+});
+</script>
+</body>
+</html>
