@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Guard: this repo must only push to the 3cheesehigh GitHub account.
+# Catches the case where the active gh-auth account, SSH key, or remote URL
+# was switched without intention, before code leaks to the wrong namespace.
+
+set -e
+
+remote_url="$(git remote get-url "${1:-origin}" 2>/dev/null || true)"
+if [[ -z "$remote_url" ]]; then
+  echo "pre-push: no remote URL resolved — aborting" >&2
+  exit 1
+fi
+if [[ "$remote_url" != *3cheesehigh* ]]; then
+  echo "pre-push: remote URL '$remote_url' is not on the 3cheesehigh namespace — aborting" >&2
+  exit 1
+fi
+
+author_email="$(git config user.email)"
+if [[ "$author_email" != "hello@3cheesehigh.com" ]]; then
+  echo "pre-push: commit author email is '$author_email', expected 'hello@3cheesehigh.com' — aborting" >&2
+  echo "         run: git config user.email hello@3cheesehigh.com" >&2
+  exit 1
+fi
+
+exit 0
