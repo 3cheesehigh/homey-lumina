@@ -14,5 +14,8 @@
   },
   "0.2.1": {
     "en": "Reworked to config-only. Bereiche are configured directly from the app settings now (group, mode, overrides, exclusions). No more virtual devices to pair. Flow cards autocomplete by zone name."
+  },
+  "0.3.0": {
+    "en": "New: log viewer in settings, mode_changed trigger card, sunrise/sunset offset sliders per group, per-lamp dim and Kelvin tuning, dashboard widget for zone mode. Curve preview now shows sunrise and sunset symbols with dashed time markers. Fixes a bug where night colour persisted into day mode on some Zigbee lamps."
   }
 }

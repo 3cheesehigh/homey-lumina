@@ -1,6 +1,6 @@
 {
   "id": "com.3cheesehigh.lumina",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "compatibility": ">=12.5.0",
   "sdk": 3,
   "platforms": [
@@ -265,9 +265,27 @@
               "de": "Modus"
             },
             "values": [
-              { "id": "off",   "label": { "en": "Off",      "de": "Aus" } },
-              { "id": "day",   "label": { "en": "Adaptive", "de": "Adaptiv" } },
-              { "id": "night", "label": { "en": "Night",    "de": "Nacht" } }
+              {
+                "id": "off",
+                "label": {
+                  "en": "Off",
+                  "de": "Aus"
+                }
+              },
+              {
+                "id": "day",
+                "label": {
+                  "en": "Adaptive",
+                  "de": "Adaptiv"
+                }
+              },
+              {
+                "id": "night",
+                "label": {
+                  "en": "Night",
+                  "de": "Nacht"
+                }
+              }
             ]
           }
         ]
@@ -351,8 +369,14 @@
         }
       ],
       "api": {
-        "getStatus": { "method": "GET", "path": "/status" },
-        "setMode": { "method": "POST", "path": "/mode" }
+        "getStatus": {
+          "method": "GET",
+          "path": "/status"
+        },
+        "setMode": {
+          "method": "POST",
+          "path": "/mode"
+        }
       }
     }
   },
