@@ -11,8 +11,8 @@
     "de": "Lumina"
   },
   "description": {
-    "en": "Lights that follow the sun.",
-    "de": "Licht, das der Sonne folgt."
+    "en": "Adaptive lighting that follows the sun.",
+    "de": "Adaptive Beleuchtung, die der Sonne folgt."
   },
   "category": [
     "tools"
