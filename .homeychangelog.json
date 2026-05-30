@@ -17,5 +17,9 @@
   },
   "0.3.0": {
     "en": "New: log viewer in settings, mode_changed trigger card, sunrise/sunset offset sliders per group, per-lamp dim and Kelvin tuning, dashboard widget for zone mode. Curve preview now shows sunrise and sunset symbols with dashed time markers. Fixes a bug where night colour persisted into day mode on some Zigbee lamps."
+  },
+  "0.6.2": {
+    "en": "New: presence-aware dimming. Two new flow cards (\"Dim light & auto-off\" with per-flow numbers, plus a \"(defaults)\" variant) drop the lamp to a partial brightness on a motion-cleared trigger, hold it, then fade smoothly to off. Smart turn on now auto-cancels any pending auto-off and restores the adaptive value, so the standard motion-on/motion-off two-flow pattern just works. New settings section \"Presence defaults\" — reduction mode (by % of current vs. to absolute %), percent, hold seconds and fade duration in one place. Group cards in settings start collapsed for less scrolling.",
+    "de": "Neu: bewegungsabhängiges Dimmen. Zwei neue Flow-Karten (\"Lampe dimmen & Auto-Aus\" mit Per-Flow-Werten plus eine \"(Standardwerte)\"-Variante) reduzieren die Helligkeit beim \"Keine Bewegung\"-Trigger, halten sie, faden dann sanft auf Aus. \"Smart einschalten\" bricht jetzt automatisch ein laufendes Auto-Aus ab und stellt den Adaptiv-Wert wieder her — der klassische Motion-an/Motion-aus-Zwei-Flow funktioniert ohne weitere Verkabelung. Neue Settings-Sektion \"Bewegungs-Standards\" — Reduktionsmodus (um/auf), Prozent, Hold-Sekunden und Fade-Dauer an einer Stelle. Gruppen-Karten in den Einstellungen starten zugeklappt für weniger Scrollen."
   }
 }

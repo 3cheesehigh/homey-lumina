@@ -4,6 +4,7 @@ const Homey = require('homey');
 const { HomeyAPI } = require('homey-api');
 const { defaults } = require('./lib/fields');
 const { ZonesController } = require('./lib/zones');
+const { PresenceController } = require('./lib/presence');
 const { kelvinToLightTemperature, computeAdaptive } = require('./lib/curve');
 
 const DEVICE_CACHE_TTL_MS = 30_000;
@@ -24,6 +25,15 @@ class LuminaApp extends Homey.App {
       this._push('seeded default group "Standard"');
     }
 
+    // Seed presence-dim defaults so the "(defaults)" flow card has sane
+    // values out of the box and the settings page renders pre-filled.
+    if (!this.homey.settings.get('presenceDefaults')) {
+      this.homey.settings.set('presenceDefaults', {
+        mode: 'relative', percent: 50, seconds: 30, fadeSeconds: 5,
+      });
+      this._push('seeded default presence config');
+    }
+
     // Shared HomeyAPI instance + 30 s cache for devices/zones. Without this
     // every runtime's tick would hit getDevices() (160+ devices) several
     // times every 5 minutes; with N zones that's NxM redundant calls.
@@ -33,11 +43,14 @@ class LuminaApp extends Homey.App {
     this._zones = new ZonesController(this);
     await this._zones.start();
 
+    this._presence = new PresenceController(this);
+
     await this._registerFlowCards();
     await this._registerWidgets();
   }
 
   async onUninit() {
+    if (this._presence) this._presence.stop();
     if (this._zones) {
       await this._zones.stop().catch(() => {});
     }
@@ -202,6 +215,12 @@ class LuminaApp extends Homey.App {
     };
 
     const performSmartOn = async (target) => {
+      // Cancel any presence dim-then-off involving this lamp -- covers both
+      // a lamp-level timer and any zone-wide timer the lamp belongs to, so
+      // the user's existing motion-detect -> smart_on flow automatically
+      // aborts the auto-off without needing a separate cancel card.
+      this._presence?.cancelForLamp(target.id);
+
       const rt = this._zones.findRuntimeForLight(target.id);
       const v = rt ? rt.getCurrentValues() : this._defaultValues();
       if (!v) throw new Error('no adaptive values available (no default group?)');
@@ -244,6 +263,7 @@ class LuminaApp extends Homey.App {
         });
         if (isOn === true) {
           this.trace(`flow: smart_toggle -> ${target.name} on, turning off`);
+          this._presence?.cancelForLamp(target.id);
           await api.devices.setCapabilityValue({
             deviceId: target.id, capabilityId: 'onoff', value: false,
           });
@@ -251,6 +271,47 @@ class LuminaApp extends Homey.App {
           this.trace(`flow: smart_toggle -> ${target.name} off, smart-on`);
           await performSmartOn(target);
         }
+      });
+    });
+
+    // ----- presence dim & auto-off (typically wired to motion sensors) -----
+
+    const parsePresenceArgs = (args) => {
+      const mode = args.mode;
+      const percent = Number(args.percent);
+      const seconds = Number(args.seconds);
+      const fade = Number(args.fade);
+      if (mode !== 'relative' && mode !== 'absolute') {
+        throw new Error(`invalid mode: ${mode}`);
+      }
+      if (!Number.isFinite(percent) || percent < 1 || percent > 99) {
+        throw new Error(`invalid percent: ${args.percent}`);
+      }
+      if (!Number.isFinite(seconds) || seconds < 1 || seconds > 3600) {
+        throw new Error(`invalid seconds: ${args.seconds}`);
+      }
+      if (!Number.isFinite(fade) || fade < 0 || fade > 60) {
+        throw new Error(`invalid fade: ${args.fade}`);
+      }
+      return { mode, percent, seconds, fadeSeconds: fade };
+    };
+
+    this._tryRegister('presence_dim_light', (card) => {
+      card.registerArgumentAutocompleteListener('target', lightAutocomplete);
+      card.registerRunListener(async (args) => {
+        const target = await resolveLightTarget(args.target);
+        const { mode, percent, seconds, fadeSeconds } = parsePresenceArgs(args);
+        this.trace(`flow: presence_dim_light -> ${target.name} ${mode} ${percent}% / ${seconds}s / fade ${fadeSeconds}s`);
+        await this._presence.startLight(target.id, { mode, percent, seconds, fadeSeconds });
+      });
+    });
+
+    this._tryRegister('presence_dim_light_default', (card) => {
+      card.registerArgumentAutocompleteListener('target', lightAutocomplete);
+      card.registerRunListener(async (args) => {
+        const target = await resolveLightTarget(args.target);
+        this.trace(`flow: presence_dim_light_default -> ${target.name} (using settings defaults)`);
+        await this._presence.startLight(target.id);
       });
     });
   }

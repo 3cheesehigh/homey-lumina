@@ -90,6 +90,29 @@
   <input id="respectManualChanges" type="checkbox">
 </div>
 <p class="hint" data-i18n="respectManualHint">If a user changes a lamp manually, the app pauses that lamp until it is switched off and back on.</p>
+
+<h3 data-i18n="presenceHeading">Presence defaults</h3>
+<p class="hint" data-i18n="presenceIntro">Used by the "Dim light & auto-off (defaults)" flow card when you wire a motion sensor without per-flow numbers.</p>
+<div class="field-row">
+  <label data-i18n="presenceModeLabel">Reduction mode</label>
+  <select id="presenceMode">
+    <option value="relative" data-i18n="presenceModeRelative">by (% of current)</option>
+    <option value="absolute" data-i18n="presenceModeAbsolute">to (absolute %)</option>
+  </select>
+</div>
+<div class="field-row">
+  <label data-i18n="presencePercentLabel">Percent</label>
+  <input id="presencePercent" type="number" min="1" max="99" step="1" placeholder="50">
+</div>
+<div class="field-row">
+  <label data-i18n="presenceSecondsLabel">Hold seconds before fade</label>
+  <input id="presenceSeconds" type="number" min="1" max="3600" step="1" placeholder="30">
+</div>
+<div class="field-row">
+  <label data-i18n="presenceFadeLabel">Fade-out seconds</label>
+  <input id="presenceFade" type="number" min="0" max="60" step="1" placeholder="5">
+</div>
+
 <button class="primary" id="saveGlobals" data-i18n="save">Save</button>
 
 <h3 data-i18n="groupsHeading">Groups</h3>
@@ -116,6 +139,15 @@ const I18N = {
     intervalHint: 'How often the app recomputes the sun position. Lamps fade between updates, 300 s is fine.',
     respectManualLabel: 'Respect manual changes',
     respectManualHint: 'If a user changes a lamp manually, the app pauses that lamp until it is switched off and back on.',
+    presenceHeading: 'Presence defaults',
+    presenceIntro: 'Used by the "Dim light & auto-off (defaults)" flow card when you wire a motion sensor without per-flow numbers.',
+    presenceModeLabel: 'Reduction mode',
+    presenceModeRelative: 'by (% of current)',
+    presenceModeAbsolute: 'to (absolute %)',
+    presencePercentLabel: 'Percent',
+    presenceSecondsLabel: 'Hold seconds before fade',
+    presenceFadeLabel: 'Fade-out seconds',
+    presenceRangeError: 'Presence values out of range: percent 1–99, hold 1–3600, fade 0–60.',
     save: 'Save',
     saveFailed: 'Save failed: ',
     globalSaved: 'Global settings saved.',
@@ -179,6 +211,15 @@ const I18N = {
     intervalHint: 'Wie oft die App den Sonnenstand neu berechnet. Lampen blenden zwischen Updates smooth, 300 s reichen.',
     respectManualLabel: 'Manuelle Änderungen respektieren',
     respectManualHint: 'Verändert ein Nutzer eine Lampe manuell, pausiert die App diese Lampe bis sie aus- und wieder eingeschaltet wird.',
+    presenceHeading: 'Bewegungs-Standards',
+    presenceIntro: 'Wird von der Flow-Karte „Lampe dimmen & Auto-Aus (Standardwerte)" genutzt, wenn du einen Bewegungsmelder ohne eigene Werte verdrahtest.',
+    presenceModeLabel: 'Reduktionsmodus',
+    presenceModeRelative: 'um (% der aktuellen)',
+    presenceModeAbsolute: 'auf (absolut %)',
+    presencePercentLabel: 'Prozent',
+    presenceSecondsLabel: 'Hold-Sekunden vor dem Fade',
+    presenceFadeLabel: 'Fade-Sekunden',
+    presenceRangeError: 'Bewegungs-Werte außerhalb des Bereichs: Prozent 1–99, Hold 1–3600, Fade 0–60.',
     save: 'Speichern',
     saveFailed: 'Speichern fehlgeschlagen: ',
     globalSaved: 'Globale Einstellungen gespeichert.',
@@ -326,7 +367,7 @@ function renderGroupCard(gid, g) {
       </div>`
     : `<div class="hint">${escapeHtml(t('noBereicheAvailable'))}</div>`;
 
-  return `<div class="group-card" data-id="${escapeHtml(gid)}">
+  return `<div class="group-card collapsed" data-id="${escapeHtml(gid)}">
     <h4>
       <span class="chev">▶</span>
       <input type="text" class="g-name" value="${escapeHtml(g.name || '')}">
@@ -540,6 +581,13 @@ function addGroup() {
   HomeyRef.set('groups', groups, (err) => {
     if (err) { setStatus(t('saveFailed') + err, 'error'); return; }
     renderGroups();
+    // Open the just-added group right away so the user can configure it
+    // without an extra click; everything else stays collapsed.
+    const card = document.querySelector(`.group-card[data-id="${id}"]`);
+    if (card) {
+      card.classList.remove('collapsed');
+      refreshCurve(card.querySelector(':scope > .group-body > [data-curve]') || card);
+    }
   });
 }
 
@@ -814,6 +862,13 @@ function onHomeyReady(Homey) {
 
     Homey.get('tickSeconds', (e, v) => { if (!e && v != null) document.getElementById('tickSeconds').value = v; });
     Homey.get('respectManualChanges', (e, v) => { if (!e && v != null) document.getElementById('respectManualChanges').checked = v !== false; });
+    Homey.get('presenceDefaults', (e, v) => {
+      const d = (typeof v === 'object' && v) ? v : {};
+      document.getElementById('presenceMode').value = d.mode === 'absolute' ? 'absolute' : 'relative';
+      document.getElementById('presencePercent').value = d.percent != null ? d.percent : 50;
+      document.getElementById('presenceSeconds').value = d.seconds != null ? d.seconds : 30;
+      document.getElementById('presenceFade').value = d.fadeSeconds != null ? d.fadeSeconds : 5;
+    });
     Homey.get('groups', (e, g) => {
       groups = (typeof g === 'object' && g) ? g : {};
       fetchZones();
@@ -828,9 +883,22 @@ function onHomeyReady(Homey) {
         setStatus(t('rangeError'), 'error');
         return;
       }
+      const pMode = document.getElementById('presenceMode').value === 'absolute' ? 'absolute' : 'relative';
+      const pPct = Number(document.getElementById('presencePercent').value);
+      const pSec = Number(document.getElementById('presenceSeconds').value);
+      const pFade = Number(document.getElementById('presenceFade').value);
+      if (!Number.isFinite(pPct) || pPct < 1 || pPct > 99
+          || !Number.isFinite(pSec) || pSec < 1 || pSec > 3600
+          || !Number.isFinite(pFade) || pFade < 0 || pFade > 60) {
+        setStatus(t('presenceRangeError'), 'error');
+        return;
+      }
       const respect = document.getElementById('respectManualChanges').checked;
       Homey.set('tickSeconds', tick, () => {});
       Homey.set('respectManualChanges', respect, () => {});
+      Homey.set('presenceDefaults', {
+        mode: pMode, percent: Math.round(pPct), seconds: Math.round(pSec), fadeSeconds: Math.round(pFade),
+      }, () => {});
       setStatus(t('globalSaved'), 'ok');
     });
 

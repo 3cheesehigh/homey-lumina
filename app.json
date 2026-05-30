@@ -1,6 +1,6 @@
 {
   "id": "com.3cheesehigh.lumina",
-  "version": "0.3.0",
+  "version": "0.6.2",
   "compatibility": ">=12.5.0",
   "sdk": 3,
   "platforms": [
@@ -11,8 +11,8 @@
     "de": "Lumina"
   },
   "description": {
-    "en": "Adaptive lighting that follows the sun.",
-    "de": "Adaptive Beleuchtung, die der Sonne folgt."
+    "en": "Adaptive lighting that follows the sun, with motion-aware dimming and auto-off.",
+    "de": "Adaptive Beleuchtung, die der Sonne folgt — mit bewegungsabhängigem Dimmen und Auto-Aus."
   },
   "category": [
     "tools"
@@ -225,6 +225,133 @@
                 }
               }
             ]
+          }
+        ]
+      },
+      {
+        "id": "presence_dim_light",
+        "title": {
+          "en": "Dim light & auto-off after delay",
+          "de": "Lampe dimmen & Auto-Aus nach Verzögerung"
+        },
+        "titleFormatted": {
+          "en": "Dim [[target]] [[mode]] [[percent]]%, off after [[seconds]]s over [[fade]]s fade",
+          "de": "[[target]] [[mode]] [[percent]]% dimmen, nach [[seconds]]s über [[fade]]s Fade aus"
+        },
+        "hint": {
+          "en": "Wire to a motion sensor's 'no motion' event. Dims the lamp, holds for the given seconds, then fades to 0 over the fade seconds and turns off. Mode 'by' = current × percent (e.g. lamp at 80% with 50% → 40%). Mode 'to' = absolute target (e.g. 80% → 50%). Fade 0 = no fade, hard off. Re-firing replaces the timer. A Smart turn on for the lamp cancels the auto-off and restores the adaptive value.",
+          "de": "An das 'Keine Bewegung'-Event eines Bewegungsmelders hängen. Dimmt die Lampe, hält die Hold-Sekunden, fadet dann über die Fade-Sekunden auf 0 und schaltet aus. Modus 'um' = aktuelle × Prozent (z.B. Lampe bei 80% mit 50% → 40%). Modus 'auf' = absoluter Zielwert (z.B. 80% → 50%). Fade 0 = ohne Fade, hart aus. Erneutes Auslösen ersetzt den Timer. Ein Smart-Einschalten der Lampe bricht das Auto-Aus ab und stellt den Adaptiv-Wert wieder her."
+        },
+        "args": [
+          {
+            "name": "target",
+            "type": "autocomplete",
+            "title": {
+              "en": "Light",
+              "de": "Lampe"
+            },
+            "placeholder": {
+              "en": "Pick a light…",
+              "de": "Lampe wählen…"
+            }
+          },
+          {
+            "name": "mode",
+            "type": "dropdown",
+            "title": {
+              "en": "Reduction mode",
+              "de": "Reduktionsmodus"
+            },
+            "values": [
+              {
+                "id": "relative",
+                "label": {
+                  "en": "by",
+                  "de": "um"
+                }
+              },
+              {
+                "id": "absolute",
+                "label": {
+                  "en": "to",
+                  "de": "auf"
+                }
+              }
+            ]
+          },
+          {
+            "name": "percent",
+            "type": "number",
+            "title": {
+              "en": "Percent",
+              "de": "Prozent"
+            },
+            "min": 1,
+            "max": 99,
+            "step": 1,
+            "placeholder": {
+              "en": "50",
+              "de": "50"
+            }
+          },
+          {
+            "name": "seconds",
+            "type": "number",
+            "title": {
+              "en": "Auto-off after (s)",
+              "de": "Auto-Aus nach (s)"
+            },
+            "min": 1,
+            "max": 3600,
+            "step": 1,
+            "placeholder": {
+              "en": "30",
+              "de": "30"
+            }
+          },
+          {
+            "name": "fade",
+            "type": "number",
+            "title": {
+              "en": "Fade-out (s)",
+              "de": "Fade-Dauer (s)"
+            },
+            "min": 0,
+            "max": 60,
+            "step": 1,
+            "placeholder": {
+              "en": "5",
+              "de": "5"
+            }
+          }
+        ]
+      },
+      {
+        "id": "presence_dim_light_default",
+        "title": {
+          "en": "Dim light & auto-off (defaults)",
+          "de": "Lampe dimmen & Auto-Aus (Standardwerte)"
+        },
+        "titleFormatted": {
+          "en": "Dim [[target]] using Lumina presence defaults",
+          "de": "[[target]] mit Lumina-Standardwerten dimmen & ausschalten"
+        },
+        "hint": {
+          "en": "Same as 'Dim light & auto-off after delay', but reduction mode, percent, hold seconds, and fade-out duration come from the Lumina settings page ('Presence defaults'). Use this when all your motion-detector flows should share the same numbers — change them once in settings and every flow follows.",
+          "de": "Wie 'Lampe dimmen & Auto-Aus nach Verzögerung', aber Reduktionsmodus, Prozent, Hold-Sekunden und Fade-Dauer kommen aus den Lumina-Einstellungen ('Bewegungs-Standards'). Praktisch, wenn alle Bewegungsmelder-Flows dieselben Werte teilen sollen — einmal in den Einstellungen ändern und alle Flows folgen."
+        },
+        "args": [
+          {
+            "name": "target",
+            "type": "autocomplete",
+            "title": {
+              "en": "Light",
+              "de": "Lampe"
+            },
+            "placeholder": {
+              "en": "Pick a light…",
+              "de": "Lampe wählen…"
+            }
           }
         ]
       }
