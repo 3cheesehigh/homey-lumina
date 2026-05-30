@@ -1,6 +1,6 @@
 {
   "id": "com.3cheesehigh.lumina",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "compatibility": ">=12.5.0",
   "sdk": 3,
   "platforms": [
