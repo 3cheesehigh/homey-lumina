@@ -1,3 +1,9 @@
+<p>
+  <a href="https://buymeacoffee.com/3cheesehigh"><img alt="Buy Me A Coffee" src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" height="50"></a>
+  &nbsp;
+  <a href="https://www.paypal.com/donate/?business=clemens.bott@gmail.com&item_name=Lumina+for+Homey&currency_code=EUR"><img alt="PayPal" src="https://img.shields.io/badge/PayPal-Donate-00457C?style=for-the-badge&logo=paypal&logoColor=white" height="50"></a>
+</p>
+
 # Lumina
 
 HomeKit-style adaptive lighting for Homey Pro. Lights follow the sun:
